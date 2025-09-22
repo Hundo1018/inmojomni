@@ -1,0 +1,11 @@
+[workspace]
+authors = ["Tien Chueh Wang <f74169@gmail.com>"]
+channels = ["https://conda.modular.com/max-nightly", "conda-forge"]
+name = "inmojomni"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+modular = ">=25.7.0.dev2025092105,<26"
