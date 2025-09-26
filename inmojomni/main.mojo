@@ -1,6 +1,14 @@
+import subprocess
+from tty.ansi import *
 
 fn main():
-    print("\033[H")
-    print("\033[31m")
-    print("Hello, world!\n")
-    print("\033[0m")
+    # var buffer : String = ""
+    print(ESC+CSI+"31m") 
+    print(ESC+CSI+ Clear(2))
+    # print(buffer)
+
+    while True:
+        try:
+            _ = input()
+        except:
+            ...
