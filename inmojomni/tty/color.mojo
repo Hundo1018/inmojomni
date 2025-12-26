@@ -1,4 +1,4 @@
 struct Color:
-    var R:UInt
-    var G:UInt
-    var B:UInt
+    var R: UInt
+    var G: UInt
+    var B: UInt

@@ -1,24 +1,24 @@
 # Control Sequence Introducer
 
 
-fn CSI_Combine[n: Int, char: String]() -> String:
+fn CSI_Combine[n: UInt, char: String]() -> String:
     return String("[", n, char)
 
 
-alias Up[n: UInt] = CSI_Combine[n, "A"]()
-alias Down[n: UInt] = CSI_Combine[n, "B"]()
-alias Right[n: UInt] = CSI_Combine[n, "C"]()
-alias Left[n: UInt] = CSI_Combine[n, "D"]()
+comptime Up[n: UInt] = CSI_Combine[n, "A"]()
+comptime Down[n: UInt] = CSI_Combine[n, "B"]()
+comptime Right[n: UInt] = CSI_Combine[n, "C"]()
+comptime Left[n: UInt] = CSI_Combine[n, "D"]()
 # alias Position[col: UInt, row: UInt] = CSI_Combine[col, "H"]()
 
-alias Erase[mode: UInt] = CSI_Combine[mode, "J"]()
+comptime Erase[mode: UInt] = CSI_Combine[mode, "J"]()
 
 
 # Escapes
-alias ESC = "\x1b"
-alias SPLIT = ";"
+comptime ESC = "\x1b"
+comptime SPLIT = ";"
 
-alias SetStyle = "m"
+comptime SetStyle = "m"
 # SGR
 
 # Colors
