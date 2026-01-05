@@ -1,0 +1,62 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Full Pipeline",
+            "dependsOn": [
+                "Shell Pixi",
+                "Build Mojo to LL"
+            ],
+            "dependsOrder": "sequence",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            }
+        },
+        {
+            "label": "Shell Pixi",
+            "type": "shell",
+            "command": "cd ${workspaceFolder}/${workspaceFolderBasename} && pixi shell"
+        },
+        {
+            "label": "Build Mojo to LL",
+            "type": "shell",
+            "command": "mojo build ${file} --emit llvm",
+            "group": "build",
+        }
+    ],
+    "inputs": [
+        {
+            "id": "rp2040",
+            "type": "pickString",
+            "decription": "Choose chip",
+        }
+    ]
+}
+/*
+${file}
+pixi shell
+mojo build main.mojo --emit llvm
+修改target triple
+target triple = "armv6m-none-eabi"
+target datalayout = "e-m:e-p:32:32-i8:8:32-i16:16:32-i64:64-n32-S32"
+../extern/llvm/llvm-build/bin/llc -march=arm -mcpu=cortex-m0 -mattr=+thumb -filetype=obj main.ll -o main.o            "cwd": "${workspaceFolder}"
+check: ../../llvm-project/llvm-build/bin/llvm-objdump -d main.o | grep -E "mov|push|pop|eax|ebx"
+# 檢查是否含有 x86 指令
+matches=$(llvm-objdump -d main.o | grep -o -E 'eax|ebx|ecx|edx|esp|ebp|rax|rbx|rcx|rdx|rsp|rbp|rip' | sort -u)
+
+if [[ -n "$matches" ]]; then
+    echo "FAIL: Contains x86 instructions"
+    echo "Detected: $matches"
+else
+    echo "PASS: No x86 instructions detected"
+fi
+
+mojo build main.mojo --emit llvm;
+*/

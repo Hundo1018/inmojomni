@@ -45,10 +45,11 @@
             "pid": "${command:pickProcessToAttach}"
         },
         {
-            //${file}
-            //pixi shell
-            //mojo build main.mojo --emit llvm
-            //llc -march=arm -mcpu=cortex-m0 -mattr=+thumb -filetype=obj main.ll -o main.o            "cwd": "${workspaceFolder}"
+            "name": "Run MyToolchain",
+            "type": "mojo-lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}",
+            "preLaunchTask": "Full Pipeline"
         }
     ]
 }
