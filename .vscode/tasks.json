@@ -35,7 +35,7 @@
         {
             "id": "rp2040",
             "type": "pickString",
-            "decription": "Choose chip",
+            "description": "Choose chip",
         }
     ]
 }
