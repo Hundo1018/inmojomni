@@ -1,3 +1,5 @@
 # inmojomni
 
-Mojo Embedded System CLI Toolchain
+Hundo's mojo monorepo
+
+inmojomni never makes ordinary jokes of mojo nightly itselfs
