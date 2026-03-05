@@ -1,9 +1,10 @@
 from algorithm import parallelize
-from memory import alloc
+from memory import alloc, UnsafePointer
 import benchmark
 import std
-
-fn naive[iterations:Int]() -> Int:
+from os.atomic import *
+@parameter
+fn naive_unsafe_pointer[iterations:Int]() -> Int:
     
     # 它會回傳一個 UnsafePointer[Int]
     var counter = alloc[Int](1)
@@ -32,23 +33,22 @@ fn naive[iterations:Int]() -> Int:
     counter.free()
     return final_val
 
-fn compare_and_swap[iterations:Int]()->Int:
-    var counter = alloc[Int](1)
-    counter[0] = 0
+@parameter 
+fn atomic_compute[iterations:Int]()->Int:
+    var counter = Atomic[DType.int32](0)
+
     @parameter
     fn worker(i:Int):
-        # TODO: CAS
-        # counter[0] += 1
+        _ = counter.fetch_add(1)
     parallelize[worker](iterations)
-    var final_val = counter[0]
-    counter.free()
+    var final_val = Int(counter.load())
     return final_val
 
 fn main():
     comptime iterations:Int = 1000000
 
     print("--- 併發測試開始 ---")
-    final_val = compare_and_swap[iterations]()
+    final_val = atomic_compute[iterations]()
     print("預期結果:", iterations)
     print("實際結果:", final_val)
     
