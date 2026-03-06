@@ -1,8 +1,7 @@
 from algorithm import parallelize
 from memory import alloc, UnsafePointer
 import benchmark
-import std
-from os.atomic import *
+from std import *
 @parameter
 fn naive_unsafe_pointer[iterations:Int]() -> Int:
     
@@ -48,6 +47,7 @@ fn main():
     comptime iterations:Int = 1000000
 
     print("--- 併發測試開始 ---")
+    
     final_val = atomic_compute[iterations]()
     print("預期結果:", iterations)
     print("實際結果:", final_val)
