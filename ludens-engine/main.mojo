@@ -1,25 +1,31 @@
-from collections import List
-struct SparseSet[fixed_size: Int,//,*keys:Int](Sized, Boolable,ImplicitlyCopyable):
-    comptime _fixed_size: Int = Self.fixed_size
-    comptime _list  = VariadicParamList(Self.keys)
+from std.collections import List, InlineArray
+from std.iter import Iterable, Iterator
 
-    var _sparse: List[Int]
-    #storage the index of dense array
+
+struct SparseSet[
+    fixed_size: Int,
+    //,
+    *keys: Int,
+](Boolable, Defaultable, ImplicitlyCopyable, Iterable, Movable, Sized):
+    comptime IteratorType = Self
+
+    comptime _list = VariadicParamList(Self.keys)
+    var _sparse: InlineArray[Int, Self.fixed_size]
+    # storage the index of dense array
     var _dense: List[Int]
-    #storage the keys
+    # storage the keys
 
-    var _current: Int
-    #for __iter__ __next__ using
+    # for __iter__ __next__ using
 
-    fn __init__(out self) :
-        self._sparse = List[Int](capacity=Self._fixed_size)
+    fn __init__(out self):
+        self._sparse = InlineArray[Int, Self.fixed_size](fill=-1)
         self._dense = List[Int]()
 
-        self._current = -1
-        for i in range(Self._fixed_size):
+        for i in range(Self.fixed_size):
             self._sparse[i] = -1
         for i in range(len(Self._list)):
             self.add(self._list[i])
+
     fn __len__(self) -> Int:
         return len(self._dense)
 
@@ -27,42 +33,51 @@ struct SparseSet[fixed_size: Int,//,*keys:Int](Sized, Boolable,ImplicitlyCopyabl
         return len(self) > 0
 
     fn add(mut self, key: Int) -> None:
-        #Add a key into set.
+        # Add a key into set.
         if self.contains(key):
             return
-        #makesure the number does not exist.
+        # makesure the number does not exist.
         self._sparse[key] = len(self._dense)
-        #update sparse array
+        # update sparse array
         self._dense.append(key)
-        #update dense array
+        # update dense array
 
     fn contains(read self, key: Int) -> Bool:
-        #Check the key whether or not in the set.
+        # Check the key whether or not in the set.
         index = self._sparse[key]
-        return index >= 0 and self._dense[index] == key
+        return (
+            index >= 0
+            and index < len(self._dense)
+            and self._dense[index] == key
+        )
 
     fn remove(mut self, key: Int):
-        #Remove the key from the set.
+        # Remove the key from the set.
         if not self.contains(key):
             return
         index = self._sparse[key]
         self._sparse[key] = -1
-        #remove map from sparse to dense
+        # remove map from sparse to dense
 
         self._dense[index] = self._dense[-1]
         _ = self._dense.pop()
-        #remove the last index of dense
+        # remove the last index of dense
 
     fn __copyinit__(out self, copy: Self):
-        #Implement for __iter__.
-        self = Self()
-        for i in self._dense:
-            self.add(i)
+        # Implement for __iter__.
+        self = copy
+        for i in range(Self.fixed_size):
+            self._sparse[i] = copy._sparse[i]
 
-    fn __iter__(ref self) -> Self:
-        return self
+    fn __iter__(mut self) -> Self.IteratorType:
+        ...
 
-    fn __next__(mut self) -> Int:
+
+struct SparseSetIterator(ImplicitlyCopyable, Iterable, Iterator):
+    comptime Element = Int
+    var _current: Int = -1
+
+    fn __next__(mut self) -> Self.Element:
         self._current += 1
         return self._dense[self._current]
 
@@ -71,7 +86,7 @@ struct SparseSet[fixed_size: Int,//,*keys:Int](Sized, Boolable,ImplicitlyCopyabl
 
 
 fn main():
-    var my_set = SparseSet[fixed_size=4,2,1]()
-    
+    var my_set = SparseSet[fixed_size=32, 2, 1, 3]()
+    my_set.add(5)
     for element in my_set:
         print(element)
