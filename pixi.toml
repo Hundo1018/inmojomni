@@ -6,6 +6,7 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
+test = { cmd = "bash -lc 'set -euo pipefail; mojo -I . tests/mojo/test_sparse_set.mojo; mojo -I . tests/mojo/test_state_machine.mojo; mojo -I . tests/mojo/test_world.mojo'" }
 
 [dependencies]
 modular = ">=26.2.0.dev2026030805,<27"
