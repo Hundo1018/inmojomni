@@ -1,13 +1,14 @@
-from algorithm import parallelize
-from memory import alloc, UnsafePointer
-import benchmark
-from std import *
+from std.algorithm import parallelize
+from std.memory import alloc, UnsafePointer
+import std.benchmark
+from std.os import Atomic
+
+
 @parameter
-fn naive_unsafe_pointer[iterations:Int]() -> Int:
-    
+fn naive_unsafe_pointer[iterations: Int]() -> Int:
     # 它會回傳一個 UnsafePointer[Int]
     var counter = alloc[Int](1)
-    
+
     # 初始化記憶體內容為 0
     counter[0] = 0
 
@@ -32,26 +33,29 @@ fn naive_unsafe_pointer[iterations:Int]() -> Int:
     counter.free()
     return final_val
 
-@parameter 
-fn atomic_compute[iterations:Int]()->Int:
+
+@parameter
+fn atomic_compute[iterations: Int]() -> Int:
     var counter = Atomic[DType.int32](0)
 
     @parameter
-    fn worker(i:Int):
+    fn worker(i: Int):
         _ = counter.fetch_add(1)
+
     parallelize[worker](iterations)
     var final_val = Int(counter.load())
     return final_val
 
+
 fn main():
-    comptime iterations:Int = 1000000
+    comptime iterations: Int = 1000000
 
     print("--- 併發測試開始 ---")
-    
+
     final_val = atomic_compute[iterations]()
     print("預期結果:", iterations)
     print("實際結果:", final_val)
-    
+
     if final_val < iterations:
         print("狀態：Race Condition 成功觸發！")
         print("遺失更新次數:", iterations - final_val)

@@ -44,12 +44,12 @@
             "description": "Search for a process to attach the debugger to.",
             "pid": "${command:pickProcessToAttach}"
         },
-        {
-            "name": "Run MyToolchain",
-            "type": "mojo-lldb",
-            "request": "launch",
-            "program": "${workspaceFolder}",
-            "preLaunchTask": "Full Pipeline"
-        }
+        // {
+        //     "name": "Run MyToolchain",
+        //     "type": "mojo-lldb",
+        //     "request": "launch",
+        //     "program": "${workspaceFolder}",
+        //     "preLaunchTask": "Full Pipeline"
+        // }
     ]
 }
