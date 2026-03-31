@@ -2,43 +2,6 @@ from std.collections import List
 
 
 @fieldwise_init
-struct _MyStructIter[
-    mut: Bool,
-    //,
-    T: Copyable & ImplicitlyCopyable,
-    origin: Origin[mut=mut],
-](ImplicitlyCopyable, Iterator):
-    comptime Element = Self.T  # Required by the Iterator trait
-
-    var index: Int
-    var src: Pointer[MyStruct[Self.T], Self.origin]
-
-    def __has_next__(self) -> Bool:
-        return self.index < len(self.src[].data)
-
-    def __next__(mut self) -> Self.T:
-        var val = self.src[].data[self.index]
-        self.index += 1
-        return val
-
-
-struct MyStruct[T: Copyable & ImplicitlyCopyable](Iterable):
-    comptime IteratorType[
-        iterable_mut: Bool, //, iterable_origin: Origin[mut=iterable_mut]
-    ]: Iterator = _MyStructIter[Self.T, iterable_origin]
-
-    var data: List[Self.T]
-
-    def __iter__(ref self) -> Self.IteratorType[origin_of(self)]:
-        return {0, Pointer(to=self)}
-
-
-# ==
-# ==
-# ==
-
-
-@fieldwise_init
 struct _SparseSetIter[
     mut: Bool,
     //,
