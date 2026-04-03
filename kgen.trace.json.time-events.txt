@@ -1,0 +1,62 @@
+Thread   Start(us)  B/E     Dur(us)  Name/Detail
+------  ----------  ---  ----------  ------------------------------
+541486   493833929  BEG         624  LowerSemanticCF
+541486   493834553  END         624  LowerSemanticCF
+541486   493834568  BEG           8  CheckLifetimes
+541486   493834572  BEG           3  (A) SymbolTableAnalysis
+541486   493834576  END           3  (A) SymbolTableAnalysis
+541486   493834577  END           8  CheckLifetimes
+541486   493834578  BEG           0  AnnotateKernels
+541486   493834579  END           0  AnnotateKernels
+541486   493834579  BEG           0  VerifyKernels
+541486   493834580  END           0  VerifyKernels
+541486   494381405  BEG           2  LowerSemanticCF
+541486   494381407  END           2  LowerSemanticCF
+541486   494381408  BEG           7  CheckLifetimes
+541486   494381410  BEG           4  (A) SymbolTableAnalysis
+541486   494381414  END           4  (A) SymbolTableAnalysis
+541486   494381415  END           7  CheckLifetimes
+541486   494381416  BEG           1  AnnotateKernels
+541486   494381417  END           1  AnnotateKernels
+541486   494381418  BEG           0  VerifyKernels
+541486   494381418  END           0  VerifyKernels
+541486   494961803  BEG           2  LowerSemanticCF
+541486   494961806  END           2  LowerSemanticCF
+541486   494961806  BEG           6  CheckLifetimes
+541486   494961808  BEG           4  (A) SymbolTableAnalysis
+541486   494961812  END           4  (A) SymbolTableAnalysis
+541486   494961813  END           6  CheckLifetimes
+541486   494961814  BEG           1  AnnotateKernels
+541486   494961815  END           1  AnnotateKernels
+541486   494961816  BEG           0  VerifyKernels
+541486   494961816  END           0  VerifyKernels
+541486   495511159  BEG           2  LowerSemanticCF
+541486   495511162  END           2  LowerSemanticCF
+541486   495511162  BEG           7  CheckLifetimes
+541486   495511164  BEG           5  (A) SymbolTableAnalysis
+541486   495511169  END           5  (A) SymbolTableAnalysis
+541486   495511170  END           7  CheckLifetimes
+541486   495511171  BEG           1  AnnotateKernels
+541486   495511172  END           1  AnnotateKernels
+541486   495511172  BEG           0  VerifyKernels
+541486   495511173  END           0  VerifyKernels
+541486   503224902  BEG        3438  LowerSemanticCF
+541486   503228340  END        3438  LowerSemanticCF
+541486   503228342  BEG       28154  CheckLifetimes
+541486   503229566  BEG          10  (A) SymbolTableAnalysis
+541486   503229576  END          10  (A) SymbolTableAnalysis
+541486   503256497  END       28154  CheckLifetimes
+541486   503256500  BEG        3272  AnnotateKernels
+541486   503259772  END        3272  AnnotateKernels
+541486   503259774  BEG         573  VerifyKernels
+541486   503260348  END         573  VerifyKernels
+541486   503833394  BEG           2  LowerSemanticCF
+541486   503833396  END           2  LowerSemanticCF
+541486   503833396  BEG           6  CheckLifetimes
+541486   503833398  BEG           4  (A) SymbolTableAnalysis
+541486   503833402  END           4  (A) SymbolTableAnalysis
+541486   503833403  END           6  CheckLifetimes
+541486   503833403  BEG           1  AnnotateKernels
+541486   503833404  END           1  AnnotateKernels
+541486   503833405  BEG           0  VerifyKernels
+541486   503833405  END           0  VerifyKernels
