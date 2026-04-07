@@ -55,6 +55,143 @@ struct Rasterizer:
     def __init__(out self):
         pass
 
+    def _char_to_mask(self, ch: String) -> Int:
+        if ch == ansi.HLINE:
+            return 10  # left + right
+        if ch == ansi.VLINE:
+            return 5  # up + down
+        if ch == ansi.TL:
+            return 6  # right + down
+        if ch == ansi.TR:
+            return 12  # left + down
+        if ch == ansi.BL:
+            return 3  # right + up
+        if ch == ansi.BR:
+            return 9  # left + up
+        if ch == ansi.T_RIGHT:
+            return 7  # right + up + down
+        if ch == ansi.T_LEFT:
+            return 13  # left + up + down
+        if ch == ansi.T_BOT:
+            return 14  # left + right + down
+        if ch == ansi.T_TOP:
+            return 11  # left + right + up
+        if ch == ansi.CROSS:
+            return 15
+        return 0
+
+    def _mask_to_char(self, mask: Int) -> String:
+        if mask == 10:
+            return ansi.HLINE
+        if mask == 5:
+            return ansi.VLINE
+        if mask == 6:
+            return ansi.TL
+        if mask == 12:
+            return ansi.TR
+        if mask == 3:
+            return ansi.BL
+        if mask == 9:
+            return ansi.BR
+        if mask == 7:
+            return ansi.T_RIGHT
+        if mask == 13:
+            return ansi.T_LEFT
+        if mask == 14:
+            return ansi.T_BOT
+        if mask == 11:
+            return ansi.T_TOP
+        if mask == 15:
+            return ansi.CROSS
+        return " "
+
+    def _merge_orthogonal(self, existing: String, incoming: String) -> String:
+        var m1 = self._char_to_mask(existing)
+        var m2 = self._char_to_mask(incoming)
+        if m1 == 0:
+            return incoming
+        if m2 == 0:
+            return existing
+        return self._mask_to_char(m1 | m2)
+
+    def _paint_line_pixel(
+        self,
+        mut canvas: RasterCanvas,
+        x: Int,
+        y: Int,
+        incoming: String,
+        color: Tuple[UInt, UInt, UInt],
+    ):
+        var existing = canvas.get_pixel(x, y)
+
+        # Orthogonal lines merge into proper junction glyphs.
+        var is_incoming_orth = incoming == ansi.HLINE or incoming == ansi.VLINE
+        var is_existing_orth = self._char_to_mask(existing) != 0
+        if is_incoming_orth and is_existing_orth:
+            canvas.set_pixel(x, y, self._merge_orthogonal(existing, incoming), color)
+            return
+
+        # Diagonal-on-diagonal intersection keeps a thin cross.
+        if (existing == ansi.SLASH and incoming == ansi.BACKSLASH) or (
+            existing == ansi.BACKSLASH and incoming == ansi.SLASH
+        ):
+            canvas.set_pixel(x, y, "╳", color)
+            return
+
+        # Orthogonal crossing with a diagonal: prefer visible crossing.
+        if is_existing_orth and (
+            incoming == ansi.SLASH or incoming == ansi.BACKSLASH
+        ):
+            canvas.set_pixel(x, y, ansi.CROSS, color)
+            return
+        if is_incoming_orth and (
+            existing == ansi.SLASH or existing == ansi.BACKSLASH
+        ):
+            canvas.set_pixel(x, y, ansi.CROSS, color)
+            return
+
+        canvas.set_pixel(x, y, incoming, color)
+
+    def _sgn(self, v: Int) -> Int:
+        if v > 0:
+            return 1
+        if v < 0:
+            return -1
+        return 0
+
+    def _corner_char_from_dirs(
+        self,
+        in_dx: Int,
+        in_dy: Int,
+        out_dx: Int,
+        out_dy: Int,
+    ) -> String:
+        # Only apply box-style corners when both edges are orthogonal.
+        var in_orth = (in_dx == 0 and in_dy != 0) or (in_dx != 0 and in_dy == 0)
+        var out_orth = (out_dx == 0 and out_dy != 0) or (out_dx != 0 and out_dy == 0)
+        if not in_orth or not out_orth:
+            return ""
+
+        var mask = 0
+        if in_dx > 0:
+            mask |= 8
+        if in_dx < 0:
+            mask |= 2
+        if in_dy > 0:
+            mask |= 1
+        if in_dy < 0:
+            mask |= 4
+        if out_dx > 0:
+            mask |= 2
+        if out_dx < 0:
+            mask |= 8
+        if out_dy > 0:
+            mask |= 4
+        if out_dy < 0:
+            mask |= 1
+
+        return self._mask_to_char(mask)
+
     def draw_line(self, mut canvas: RasterCanvas, x1: Int, y1: Int, x2: Int, y2: Int, color: Tuple[UInt, UInt, UInt]):
         """用 Bresenham 算法繪製線段，根據角度選擇合適的 Unicode 線條字符."""
         var dx = x2 - x1
@@ -89,7 +226,7 @@ struct Rasterizer:
         var y = y1
         
         while True:
-            canvas.set_pixel(x, y, char, color)
+            self._paint_line_pixel(canvas, x, y, char, color)
             if x == x2 and y == y2:
                 break
             var e2 = 2 * err
@@ -107,6 +244,51 @@ struct Rasterizer:
             var v1 = vertices[i]
             var v2 = vertices[(i + 1) % num_vertices]
             self.draw_line(canvas, v1[0], v1[1], v2[0], v2[1], color)
+
+        # 對可折角情況補上不分岔的直角字元。
+        for i in range(num_vertices):
+            var prev = vertices[(i + num_vertices - 1) % num_vertices]
+            var cur = vertices[i]
+            var nxt = vertices[(i + 1) % num_vertices]
+
+            var in_dx = self._sgn(cur[0] - prev[0])
+            var in_dy = self._sgn(cur[1] - prev[1])
+            var out_dx = self._sgn(nxt[0] - cur[0])
+            var out_dy = self._sgn(nxt[1] - cur[1])
+
+            var c = self._corner_char_from_dirs(in_dx, in_dy, out_dx, out_dy)
+            if len(c) > 0:
+                canvas.set_pixel(cur[0], cur[1], c, color)
+
+    def draw_circle_outline(
+        self,
+        mut canvas: RasterCanvas,
+        cx: Int,
+        cy: Int,
+        radius: Int,
+        color: Tuple[UInt, UInt, UInt],
+    ):
+        """中點圓演算法繪製圓形外框。"""
+        var x = radius
+        var y = 0
+        var decision = 1 - radius
+
+        while x >= y:
+            canvas.set_pixel(cx + x, cy + y, "○", color)
+            canvas.set_pixel(cx + y, cy + x, "○", color)
+            canvas.set_pixel(cx - y, cy + x, "○", color)
+            canvas.set_pixel(cx - x, cy + y, "○", color)
+            canvas.set_pixel(cx - x, cy - y, "○", color)
+            canvas.set_pixel(cx - y, cy - x, "○", color)
+            canvas.set_pixel(cx + y, cy - x, "○", color)
+            canvas.set_pixel(cx + x, cy - y, "○", color)
+
+            y += 1
+            if decision <= 0:
+                decision += 2 * y + 1
+            else:
+                x -= 1
+                decision += 2 * (y - x) + 1
 
     def draw_box(self, mut canvas: RasterCanvas, x1: Int, y1: Int, x2: Int, y2: Int, color: Tuple[UInt, UInt, UInt]):
         """繪製矩形邊框（使用 Unicode 線條字符)."""
