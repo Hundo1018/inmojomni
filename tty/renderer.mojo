@@ -1,5 +1,4 @@
 from tty import ansi
-from tty.color import Color
 
 
 struct RasterCanvas:

@@ -1,6 +1,6 @@
 from tty import ansi
-from moth.renderer import RasterCanvas, Rasterizer
-from moth.axes import Axes
+from tty.renderer import RasterCanvas, Rasterizer
+from tty.axes import Axes
 from std.time import perf_counter_ns
 
 struct Shape[dimension: Int](Copyable, Movable, Writable):

@@ -1,4 +1,4 @@
-from moth.renderer import RasterCanvas, Rasterizer
+from tty.renderer import RasterCanvas, Rasterizer
 from tty import ansi
 
 
