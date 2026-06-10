@@ -10,6 +10,5 @@ preview = ["pixi-build"]
 
 
 [dependencies]
-modular = ">=26.4.0.dev2026051006,<27"
-mojo = ">=1.0.0b2.dev2026051006,<2"
-wgpu-mojo = { git = "https://github.com/Hundo1018/wgpu-mojo" }
+modular = ">=26.4.0.dev2026051806,<27"
+mojo = ">=1.0.0b2.dev2026051806,<2"

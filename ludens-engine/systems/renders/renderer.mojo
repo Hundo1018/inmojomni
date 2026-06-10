@@ -1,5 +1,4 @@
-from wgpu import GPU
+from wgpu import rendercanvas
 
 def main()raises:
-    var gpu = GPU()
-    _ = gpu^
+    ...
