@@ -1,39 +1,64 @@
-from std.math import pow
+"""Primitive shapes and the `Intersectable` cross-shape contract.
 
-comptime WorldType = DType.float32
-comptime Vec1 = SIMD[WorldType, 1]
-comptime Vec2 = SIMD[WorldType, 2]
+`Circle`/`Sphere` are the simple radial primitives; `Polygon` is a convex
+polygon used by the SAT and GJK narrowphase tests. `AABB[dim]` lives in
+`geometry.aabb`. Reductions go through `geometry.vec` helpers (never SIMD
+`reduce_*`, which is broken on width 3 here).
+"""
+
+from .vec import WorldType, Real, Vec2, Vec3, distance_sq
 
 
-trait Intersectable:
+trait Intersectable(Copyable, Movable, ImplicitlyDeletable):
+    """Same-shape overlap test, e.g. `Circle` vs `Circle`."""
+
     def isintersect(self, other: Self) -> Bool:
         ...
 
 
 @fieldwise_init
-struct Circle(Intersectable, TrivialRegisterPassable):
+struct Circle(Intersectable, Copyable, ImplicitlyCopyable, Movable):
     var center: Vec2
-    var radius: Vec1
+    var radius: Real
 
-    @always_inline
     def isintersect(self, other: Self) -> Bool:
-        return pow(other.center[0] - self.center[0], 2) + pow(
-            other.center[1] - self.center[1], 2
-        ) <= pow(self.radius + other.radius, 2)
+        var rsum = self.radius + other.radius
+        return distance_sq(self.center, other.center) <= rsum * rsum
 
 
 @fieldwise_init
-struct AABB(TrivialRegisterPassable):
-    var min: Vec2
-    var max: Vec2
+struct Sphere(Intersectable, Copyable, ImplicitlyCopyable, Movable):
+    var center: Vec3
+    var radius: Real
+
+    def isintersect(self, other: Self) -> Bool:
+        var rsum = self.radius + other.radius
+        return distance_sq(self.center, other.center) <= rsum * rsum
 
 
-@fieldwise_init
-struct Triangle(TrivialRegisterPassable):
-    var vertices: SIMD[WorldType, 6]
+struct Polygon(Copyable, Movable, Sized):
+    """A convex polygon in 2D, vertices in CCW order."""
 
+    var verts: List[Vec2]
 
-def main():
-    var c0 = Circle(Vec2(0, 0), 1)
-    var c1 = Circle(Vec2(0, 0), 2)
-    print(c0.isintersect(c1))
+    def __init__(out self, var verts: List[Vec2]):
+        self.verts = verts^
+
+    def __len__(self) -> Int:
+        return len(self.verts)
+
+    @staticmethod
+    def box(cx: Real, cy: Real, hx: Real, hy: Real) -> Self:
+        """An axis-aligned rectangle as a polygon, CCW from bottom-left."""
+        var v = List[Vec2]()
+        v.append(Vec2(cx - hx, cy - hy))
+        v.append(Vec2(cx + hx, cy - hy))
+        v.append(Vec2(cx + hx, cy + hy))
+        v.append(Vec2(cx - hx, cy + hy))
+        return Self(v^)
+
+    def translated(self, dx: Real, dy: Real) -> Self:
+        var v = List[Vec2]()
+        for i in range(len(self.verts)):
+            v.append(self.verts[i] + Vec2(dx, dy))
+        return Self(v^)
