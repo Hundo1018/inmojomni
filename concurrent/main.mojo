@@ -46,19 +46,18 @@
 #         _type=None,
 #         _properties=__mlir_attr.`{ordering = 0 : i64, isVolatile = true}`,
 #     ](mask_i32, out_set_addr)
-def write_to_address(mmio_address: Int, value: Int32):
-    var ptr = UnsafePointer[Int32, MutExternalOrigin](
-      unsafe_from_address=mmio_address
-    )
+from std.memory import UnsafePointer, alloc
 
-     # Writing to a raw memory address may require a volatile load/store as the
-     # operation may have side effects not visible to the compiler.
-     # You can specify this using the `volatile` parameter.
-    ptr.store[volatile = True](value)
+comptime _I32Ptr = type_of(alloc[Int32](1))
+
+def write_to_address(mmio_address: Int, value: Int32):
+    var ptr = _I32Ptr(unsafe_from_address=mmio_address)
+    # Writing to a raw memory address requires volatile store to prevent the
+    # compiler from eliding the access as a dead write.
+    ptr.store[volatile=True](value)
 
 def main():
-    var ptr: UnsafePointer[Int, MutExternalOrigin]
-    ptr = alloc[Int](1)
+    var ptr = alloc[Int](1)
     
     # var ptr = UnsafePointer(unsafe_from_address=0xD000001C)
     # gpio_set(25, 1)  # GPIO25 高電位

@@ -6,6 +6,9 @@ from ecs.world import World
 from ecs.storage import StorageBackend
 from ecs.sparse_backend import SparseSetBackend
 from ecs.archetype import ArchetypeBackend
+from ecs.bitset_backend import BitsetBackend
+from ecs.reactive_backend import ReactiveBackend
+from ecs.naive_backend import NaiveBackend
 from ecs.component import ComponentType
 from ecs.entity import Entity
 
@@ -73,21 +76,35 @@ def run_scenario[B: StorageBackend]() -> List[Int]:
     return out^
 
 
-def main() raises:
-    var s = Suite("backend_parity")
-
-    var sparse = run_scenario[SparseSetBackend[Position, Velocity, Frozen]]()
-    var arch = run_scenario[ArchetypeBackend[Position, Velocity, Frozen]]()
-
-    s.eqi(len(sparse), len(arch), "summary length matches")
+def _compare(
+    mut s: Suite, name: String, sparse: List[Int], other: List[Int]
+):
     var labels = List[String]()
     labels.append("entity_count")
     labels.append("count[P]")
     labels.append("count[P,V]")
     labels.append("count[P,V,F]")
     labels.append("sum_x")
+    s.eqi(len(other), len(sparse), name + ": summary length matches")
     for i in range(len(sparse)):
-        s.eqi(arch[i], sparse[i], "parity: " + labels[i])
+        s.eqi(other[i], sparse[i], name + " parity: " + labels[i])
+
+
+def main() raises:
+    var s = Suite("backend_parity")
+
+    # The sparse-set backend is the reference; every other backend must produce
+    # the identical order-independent summary for the same scenario.
+    var sparse = run_scenario[SparseSetBackend[Position, Velocity, Frozen]]()
+    var arch = run_scenario[ArchetypeBackend[Position, Velocity, Frozen]]()
+    var bitset = run_scenario[BitsetBackend[Position, Velocity, Frozen]]()
+    var reactive = run_scenario[ReactiveBackend[Position, Velocity, Frozen]]()
+    var naive = run_scenario[NaiveBackend[Position, Velocity, Frozen]]()
+
+    _compare(s, "archetype", sparse, arch)
+    _compare(s, "bitset", sparse, bitset)
+    _compare(s, "reactive", sparse, reactive)
+    _compare(s, "naive", sparse, naive)
 
     # sanity: the scenario isn't trivially empty
     s.eqi(sparse[0], 9, "9 entities remain (10 - 1 despawned)")

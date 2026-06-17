@@ -14,6 +14,23 @@ in `*CTs` (only the pointer is erased; the list stays typed). The archetype
 table is preallocated (`capacity=MAX_ARCH`) so it never reallocs and indices stay
 stable; archetypes are `Movable`-not-`Copyable` so the column pointers are never
 aliased.
+
+## Improvements over the naive model
+
+**Archetype graph edges**: each `Archetype` caches the index of the target
+archetype reached by adding or removing one component (`add_edges[slot]` /
+`remove_edges[slot]`). On a cache hit the transition costs one array read;
+`_find_or_create` is only called on the first traversal of each edge. The
+reverse edge is populated simultaneously so both directions warm up in one
+traversal.
+
+**Entity-ID recycling**: despawned IDs go on a `free_ids` list. The per-ID
+generation counter (`_gen[id]`) is bumped on every despawn so stale `Entity`
+handles are correctly detected as dead after the ID is reused.
+
+**Column-view queries** (`query2_views`): return `ArchView2` structs that expose
+the heap-allocated column `List` pointers directly, enabling contiguous SoA
+iteration without per-entity `get()` overhead.
 """
 
 from std.memory import UnsafePointer, alloc
@@ -22,9 +39,67 @@ from .entity import Entity
 from .sparse_set import SparseSet
 from .storage import StorageBackend, Record
 
-comptime CAP = 4096  # maximum live entity id
+comptime DEFAULT_CAP = 4096  # default maximum live entity id
 comptime MAX_ARCH = 256  # supports up to 8 component types (2^8 signatures)
-comptime Slot = UnsafePointer[NoneType, MutUntrackedOrigin]
+comptime Slot = type_of(alloc[NoneType](1))
+
+
+struct ArchView2[A: ComponentType, B: ComponentType](Copyable, ImplicitlyCopyable, Movable):
+    """Zero-copy view into one matching archetype's component columns.
+
+    Obtained from `ArchetypeBackend.query2_views[A, B]()`. Each view covers a
+    single archetype (a contiguous slice of entities sharing the same component
+    signature). Iterate `range(view.len())` and use `get_a` / `set_a` / `get_b`
+    / `set_b` to read and write column data directly — no per-entity `get()`
+    overhead and no redundant entity-index lookups.
+
+    Internally the column slots point to heap-allocated `List[A]` / `List[B]`
+    structs owned by the archetype, so access is two dereferences (pointer →
+    list → element), the same cost as the existing `_col[C](arch)[][row]` path.
+
+    The slots are only valid while the backend that produced them is alive and
+    no archetype-relocating operation (component add/remove/despawn) is performed
+    on an entity in this archetype.
+
+    Example — movement system:
+        for view in backend.query2_views[Position, Velocity]():
+            for i in range(view.len()):
+                var p = view.get_a(i)
+                var v = view.get_b(i)
+                view.set_a(i, Position(p.x + v.dx, p.y + v.dy))
+    """
+
+    var _count: Int
+    var _col_a: Slot  # -> heap List[A]
+    var _col_b: Slot  # -> heap List[B]
+
+    def __init__(out self, count: Int, col_a: Slot, col_b: Slot):
+        self._count = count
+        self._col_a = col_a
+        self._col_b = col_b
+
+    def len(self) -> Int:
+        return self._count
+
+    def get_a(self, i: Int) -> Self.A:
+        return self._col_a.bitcast[List[Self.A]]()[][i]
+
+    def get_b(self, i: Int) -> Self.B:
+        return self._col_b.bitcast[List[Self.B]]()[][i]
+
+    def set_a(self, i: Int, value: Self.A):
+        self._col_a.bitcast[List[Self.A]]()[][i] = value
+
+    def set_b(self, i: Int, value: Self.B):
+        self._col_b.bitcast[List[Self.B]]()[][i] = value
+
+    def unsafe_col_a(self) -> type_of(alloc[Self.A](1)):
+        """Raw pointer to A's contiguous column buffer (for SIMD / bulk ops)."""
+        return self._col_a.bitcast[List[Self.A]]()[].unsafe_ptr()
+
+    def unsafe_col_b(self) -> type_of(alloc[Self.B](1)):
+        """Raw pointer to B's contiguous column buffer (for SIMD / bulk ops)."""
+        return self._col_b.bitcast[List[Self.B]]()[].unsafe_ptr()
 
 
 struct Archetype[*CTs: ComponentType](Movable, ImplicitlyDeletable):
@@ -32,11 +107,15 @@ struct Archetype[*CTs: ComponentType](Movable, ImplicitlyDeletable):
     var mask: Int  # bit i set => component slot i present
     var entities: List[Int]  # row -> entity id
     var cols: List[Slot]  # slot i -> heap List[CTs[i]] (used iff bit i in mask)
+    var add_edges: InlineArray[Int, Self.N]     # slot -> target archetype index on add  (-1 = unset)
+    var remove_edges: InlineArray[Int, Self.N]  # slot -> target archetype index on remove (-1 = unset)
 
     def __init__(out self, mask: Int):
         self.mask = mask
         self.entities = List[Int]()
         self.cols = List[Slot](capacity=Self.N)
+        self.add_edges = InlineArray[Int, Self.N](fill=-1)
+        self.remove_edges = InlineArray[Int, Self.N](fill=-1)
         comptime for i in range(Self.N):
             comptime T = Self.CTs[i]
             var p = alloc[List[T]](1)
@@ -51,20 +130,26 @@ struct Archetype[*CTs: ComponentType](Movable, ImplicitlyDeletable):
             p.free()
 
 
-struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
+struct ArchetypeBackend[*CTs: ComponentType, cap: Int = DEFAULT_CAP](
+    StorageBackend
+):
     comptime N: Int = len(Self.CTs)
     var archetypes: List[Archetype[*Self.CTs]]
     var arch_mask_index: List[Int]  # parallel: mask of archetypes[k]
-    var entity_index: SparseSet[Record, CAP]  # entity id -> {archetype, row}
-    var alive: SparseSet[Int, CAP]  # entity id -> generation
+    var entity_index: SparseSet[Record, Self.cap]  # entity id -> {archetype, row}
+    var alive: SparseSet[Int, Self.cap]  # entity id -> generation
     var counter: Int
+    var free_ids: List[Int]          # recycled entity IDs waiting for reuse
+    var _gen: InlineArray[Int, Self.cap]  # per-id generation; bumped on despawn
 
     def __init__(out self):
         self.archetypes = List[Archetype[*Self.CTs]](capacity=MAX_ARCH)
         self.arch_mask_index = List[Int](capacity=MAX_ARCH)
-        self.entity_index = SparseSet[Record, CAP]()
-        self.alive = SparseSet[Int, CAP]()
+        self.entity_index = SparseSet[Record, Self.cap]()
+        self.alive = SparseSet[Int, Self.cap]()
         self.counter = 0
+        self.free_ids = List[Int]()
+        self._gen = InlineArray[Int, Self.cap](fill=0)
         # archetype 0 is always the empty signature (newly spawned entities)
         self.archetypes.append(Archetype[*Self.CTs](0))
         self.arch_mask_index.append(0)
@@ -84,7 +169,31 @@ struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
         self.arch_mask_index.append(mask)
         return len(self.archetypes) - 1
 
-    def _col[C: ComponentType](self, arch: Int) -> UnsafePointer[List[C], MutUntrackedOrigin]:
+    def _transition_add(mut self, arch: Int, slot: Int) -> Int:
+        """Return the archetype reached from `arch` by adding component `slot`.
+        On a cache miss, finds or creates the target and caches both directions."""
+        var cached = self.archetypes[arch].add_edges[slot]
+        if cached != -1:
+            return cached
+        var new_mask = self.archetypes[arch].mask | (1 << slot)
+        var target = self._find_or_create(new_mask)
+        self.archetypes[arch].add_edges[slot] = target
+        self.archetypes[target].remove_edges[slot] = arch
+        return target
+
+    def _transition_remove(mut self, arch: Int, slot: Int) -> Int:
+        """Return the archetype reached from `arch` by removing component `slot`.
+        On a cache miss, finds or creates the target and caches both directions."""
+        var cached = self.archetypes[arch].remove_edges[slot]
+        if cached != -1:
+            return cached
+        var new_mask = self.archetypes[arch].mask & ~(1 << slot)
+        var target = self._find_or_create(new_mask)
+        self.archetypes[arch].remove_edges[slot] = target
+        self.archetypes[target].add_edges[slot] = arch
+        return target
+
+    def _col[C: ComponentType](self, arch: Int) -> type_of(alloc[List[C]](1)):
         return self.archetypes[arch].cols[Self._slot_of[C]()].bitcast[List[C]]()
 
     def _swap_remove(mut self, arch: Int, row: Int):
@@ -105,13 +214,18 @@ struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
 
     # --- lifecycle ---
     def spawn(mut self) -> Entity:
-        var id = self.counter
-        self.counter += 1
-        self.alive.set(id, 0)
+        var id: Int
+        if len(self.free_ids) > 0:
+            id = self.free_ids.pop()
+        else:
+            id = self.counter
+            self.counter += 1
+        var gen = self._gen[id]
+        self.alive.set(id, gen)
         var row = len(self.archetypes[0].entities)
         self.archetypes[0].entities.append(id)
         self.entity_index.set(id, Record(0, row))
-        return Entity(id, 0)
+        return Entity(id, gen)
 
     def despawn(mut self, e: Entity):
         if not self.is_alive(e):
@@ -120,6 +234,8 @@ struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
         self._swap_remove(rec.archetype, rec.row)
         self.entity_index.remove(e.id)
         self.alive.remove(e.id)
+        self._gen[e.id] = e.gen + 1
+        self.free_ids.append(e.id)
 
     def is_alive(self, e: Entity) -> Bool:
         return self.alive.contains(e.id) and self.alive.get(e.id) == e.gen
@@ -137,8 +253,7 @@ struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
             self._col[C](rec.archetype)[][rec.row] = value
             return
         # relocate to the archetype with C added
-        var new_mask = old_mask | (1 << slot)
-        var target = self._find_or_create(new_mask)
+        var target = self._transition_add(rec.archetype, slot)
         var old_arch = rec.archetype
         var old_row = rec.row
         comptime for i in range(Self.N):
@@ -167,7 +282,7 @@ struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
         if (old_mask & (1 << slot)) == 0:
             return
         var new_mask = old_mask & ~(1 << slot)
-        var target = self._find_or_create(new_mask)
+        var target = self._transition_remove(rec.archetype, slot)
         var old_arch = rec.archetype
         var old_row = rec.row
         comptime for i in range(Self.N):
@@ -206,4 +321,22 @@ struct ArchetypeBackend[*CTs: ComponentType](StorageBackend):
             1 << Self._slot_of[C]()
         )
         self._collect(bits, out)
+        return out^
+
+    def query2_views[A: ComponentType, B: ComponentType](mut self) -> List[ArchView2[A, B]]:
+        """Return zero-copy column views for all archetypes matching A+B.
+
+        Each `ArchView2` exposes the heap-allocated column lists directly.
+        Iterate `range(v.len())` and call `get_a` / `set_a` / `get_b` / `set_b`
+        to read/write component data without per-entity `get()` overhead.
+        """
+        var bits = (1 << Self._slot_of[A]()) | (1 << Self._slot_of[B]())
+        var out = List[ArchView2[A, B]]()
+        for k in range(len(self.archetypes)):
+            if (self.archetypes[k].mask & bits) == bits and len(self.archetypes[k].entities) > 0:
+                out.append(ArchView2[A, B](
+                    len(self.archetypes[k].entities),
+                    self._col[A](k).bitcast[NoneType](),
+                    self._col[B](k).bitcast[NoneType](),
+                ))
         return out^

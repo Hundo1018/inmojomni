@@ -112,7 +112,17 @@ def _mink[dim: Int](
     return a.support(dir) - b.support(-dir)
 
 
-def gjk_intersect[dim: Int](a: ConvexPoly[dim], b: ConvexPoly[dim]) -> Bool:
+@fieldwise_init
+struct GjkHit[dim: Int](Copyable, Movable):
+    """Result of `gjk_query`: whether the shapes intersect plus the terminating
+    simplex (used as EPA's seed polytope when there is a hit)."""
+
+    var hit: Bool
+    var simplex: Simplex[Self.dim]
+
+
+def gjk_query[dim: Int](a: ConvexPoly[dim], b: ConvexPoly[dim]) -> GjkHit[dim]:
+    """GJK that also returns the final simplex (see `gjk_intersect` for the test)."""
     var d = _Vec[dim](0)
     d[0] = 1  # arbitrary initial direction
     var s = Simplex[dim].with1(_mink(a, b, d))
@@ -120,14 +130,18 @@ def gjk_intersect[dim: Int](a: ConvexPoly[dim], b: ConvexPoly[dim]) -> Bool:
 
     for _ in range(64):
         if dot(d, d) == 0:
-            return True  # origin already on the simplex
+            return GjkHit[dim](True, s.copy())  # origin already on the simplex
         var p = _mink(a, b, d)
         if dot(p, d) < 0:
-            return False  # no support past the origin -> separated
+            return GjkHit[dim](False, s.copy())  # no support past origin -> separated
         s.push(p)
         if _do_simplex[dim](s, d):
-            return True
-    return False
+            return GjkHit[dim](True, s.copy())
+    return GjkHit[dim](False, s.copy())
+
+
+def gjk_intersect[dim: Int](a: ConvexPoly[dim], b: ConvexPoly[dim]) -> Bool:
+    return gjk_query[dim](a, b).hit
 
 
 def _do_simplex[dim: Int](mut s: Simplex[dim], mut d: _Vec[dim]) -> Bool:

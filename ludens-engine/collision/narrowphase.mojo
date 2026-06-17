@@ -15,7 +15,10 @@ from geometry.vec import WorldType, Real, Vec2, distance_sq, length, normalize
 from geometry.aabb import AABB
 from geometry.shape import Circle, Polygon
 from geometry.sat import sat_collide
-from geometry.gjk import ConvexPoly, gjk_intersect
+from geometry.gjk import ConvexPoly
+from geometry.epa import gjk_collide
+from geometry.obb import OBB, obb_collide
+from geometry.sdf import SdfShape, sdf_collide
 
 
 @fieldwise_init
@@ -116,6 +119,38 @@ struct GJKNarrowPhase[D: Int](NarrowPhase):
         return len(self.shapes) - 1
 
     def test(self, a: Int, b: Int) -> Contact[Self.D]:
-        # boolean GJK: reports hit but no penetration data
-        var hit = gjk_intersect[Self.D](self.shapes[a], self.shapes[b])
-        return Contact[Self.D](hit, SIMD[WorldType, Self.D](0), 0)
+        # GJK + EPA: hit plus penetration (depth/normal exact in 2D, zero in 3D).
+        var r = gjk_collide[Self.D](self.shapes[a], self.shapes[b])
+        return Contact[Self.D](r.hit, r.normal, r.depth)
+
+
+struct OBBNarrowPhase(NarrowPhase):
+    comptime dim: Int = 2
+    var boxes: List[OBB]
+
+    def __init__(out self):
+        self.boxes = List[OBB]()
+
+    def add(mut self, box: OBB) -> Int:
+        self.boxes.append(box)
+        return len(self.boxes) - 1
+
+    def test(self, a: Int, b: Int) -> Contact[2]:
+        var r = obb_collide(self.boxes[a], self.boxes[b])
+        return Contact[2](r.hit, r.normal, r.depth)
+
+
+struct SDFNarrowPhase(NarrowPhase):
+    comptime dim: Int = 2
+    var shapes: List[SdfShape]
+
+    def __init__(out self):
+        self.shapes = List[SdfShape]()
+
+    def add(mut self, shape: SdfShape) -> Int:
+        self.shapes.append(shape)
+        return len(self.shapes) - 1
+
+    def test(self, a: Int, b: Int) -> Contact[2]:
+        var r = sdf_collide(self.shapes[a], self.shapes[b])
+        return Contact[2](r.hit, r.normal, r.depth)

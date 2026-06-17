@@ -10,7 +10,9 @@ mojo precompile ludens-engine/harness   -o build/harness.mojoc
 mojo precompile ludens-engine/geometry  -o build/geometry.mojoc
 mojo precompile ludens-engine/spatial   -I build -o build/spatial.mojoc
 mojo precompile ludens-engine/ecs       -o build/ecs.mojoc
+mojo precompile ludens-engine/scheduler -I build -o build/scheduler.mojoc
 mojo precompile ludens-engine/collision -I build -o build/collision.mojoc
 mojo precompile ludens-engine/physics   -I build -o build/physics.mojoc
+mojo precompile ludens-engine/oop       -I build -o build/oop.mojoc
 
 echo "build: all packages precompiled into build/"

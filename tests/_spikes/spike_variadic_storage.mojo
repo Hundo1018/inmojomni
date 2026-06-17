@@ -5,7 +5,7 @@
 
 from std.memory import UnsafePointer, alloc
 
-comptime Slot = UnsafePointer[NoneType, MutUntrackedOrigin]
+comptime Slot = type_of(alloc[NoneType](1))
 
 
 trait ComponentType(Copyable, ImplicitlyCopyable, Movable, ImplicitlyDeletable):
@@ -74,7 +74,7 @@ struct Backend[*CTs: ComponentType](Movable):
                 idx = i
         return idx
 
-    def store[C: ComponentType](self) -> UnsafePointer[ComponentStore[C], MutUntrackedOrigin]:
+    def store[C: ComponentType](self) -> type_of(alloc[ComponentStore[C]](1)):
         return self.slots[Self.slot_of[C]()].bitcast[ComponentStore[C]]()
 
     def push[C: ComponentType](mut self, var v: C):

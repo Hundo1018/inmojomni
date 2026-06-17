@@ -13,6 +13,8 @@ build = "bash scripts/build_engine.sh"
 test = { cmd = "bash scripts/run_tests.sh", depends-on = ["build"] }
 # Build, then run every example.
 examples = { cmd = "bash scripts/run_examples.sh", depends-on = ["build"] }
+# Build, then run every benchmark and write BENCHMARK_REPORT.md.
+benchmark = { cmd = "bash scripts/run_benchmarks.sh", depends-on = ["build"] }
 
 [dependencies]
 modular = ">=26.4.0.dev2026051806,<27"

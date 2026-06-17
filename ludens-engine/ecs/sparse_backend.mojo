@@ -17,30 +17,32 @@ from .entity import Entity
 from .sparse_set import SparseSet
 from .storage import StorageBackend
 
-comptime CAP = 4096  # maximum live entity id
-comptime Slot = UnsafePointer[NoneType, MutUntrackedOrigin]
+comptime DEFAULT_CAP = 4096  # default maximum live entity id
+comptime Slot = type_of(alloc[NoneType](1))
 
 
-struct SparseSetBackend[*CTs: ComponentType](StorageBackend):
+struct SparseSetBackend[*CTs: ComponentType, cap: Int = DEFAULT_CAP](
+    StorageBackend
+):
     comptime N: Int = len(Self.CTs)
-    var slots: List[Slot]  # slot i -> heap SparseSet[CTs[i], CAP]
-    var alive: SparseSet[Int, CAP]  # entity id -> generation
+    var slots: List[Slot]  # slot i -> heap SparseSet[CTs[i], cap]
+    var alive: SparseSet[Int, Self.cap]  # entity id -> generation
     var counter: Int
 
     def __init__(out self):
         self.slots = List[Slot](capacity=Self.N)
         comptime for i in range(Self.N):
             comptime T = Self.CTs[i]
-            var p = alloc[SparseSet[T, CAP]](1)
-            p.init_pointee_move(SparseSet[T, CAP]())
+            var p = alloc[SparseSet[T, Self.cap]](1)
+            p.init_pointee_move(SparseSet[T, Self.cap]())
             self.slots.append(p.bitcast[NoneType]())
-        self.alive = SparseSet[Int, CAP]()
+        self.alive = SparseSet[Int, Self.cap]()
         self.counter = 0
 
     def __del__(deinit self):
         comptime for i in range(Self.N):
             comptime T = Self.CTs[i]
-            var p = self.slots[i].bitcast[SparseSet[T, CAP]]()
+            var p = self.slots[i].bitcast[SparseSet[T, Self.cap]]()
             p.destroy_pointee()
             p.free()
 
@@ -51,8 +53,8 @@ struct SparseSetBackend[*CTs: ComponentType](StorageBackend):
                 return i
         return -1
 
-    def _store[C: ComponentType](self) -> UnsafePointer[SparseSet[C, CAP], MutUntrackedOrigin]:
-        return self.slots[Self._slot_of[C]()].bitcast[SparseSet[C, CAP]]()
+    def _store[C: ComponentType](self) -> type_of(alloc[SparseSet[C, Self.cap]](1)):
+        return self.slots[Self._slot_of[C]()].bitcast[SparseSet[C, Self.cap]]()
 
     # --- lifecycle ---
     def spawn(mut self) -> Entity:
