@@ -6,15 +6,10 @@ platforms = ["linux-64"]
 version = "0.1.0"
 preview = ["pixi-build"]
 
+# The ludens-engine subsystems (ECS, geometry, physics, collision, scheduler,
+# spatial, harness, oop) now live in their own repo at ~/Projects/ludens-engine.
+# What remains here are the standalone experiments: concurrent/, logic/, rx/.
 [tasks]
-# Precompile all ludens-engine packages into build/ (required before run/test).
-build = "bash scripts/build_engine.sh"
-# Build, then run every test file (stops at the first failure).
-test = { cmd = "bash scripts/run_tests.sh", depends-on = ["build"] }
-# Build, then run every example.
-examples = { cmd = "bash scripts/run_examples.sh", depends-on = ["build"] }
-# Build, then run every benchmark and write BENCHMARK_REPORT.md.
-benchmark = { cmd = "bash scripts/run_benchmarks.sh", depends-on = ["build"] }
 
 [dependencies]
 modular = ">=26.4.0.dev2026051806,<27"
