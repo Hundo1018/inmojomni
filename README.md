@@ -111,6 +111,8 @@ no clone needed:
 ```sh
 pixi init myproject && cd myproject
 pixi workspace channel add https://conda.modular.com/max-nightly
+# git dependencies use the pixi-build preview: add to [workspace] in pixi.toml
+#   preview = ["pixi-build"]
 pixi add --git https://github.com/Hundo1018/inmojomni.git inmojomni
 ```
 
