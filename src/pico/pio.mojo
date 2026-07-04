@@ -61,7 +61,7 @@ comptime _PINCTRL: UInt32 = 0x14
 comptime _MAX_FUTURES = 8
 
 
-struct Asm(Movable):
+struct Asm(Copyable, ImplicitlyCopyable, Movable):
     """A PIO program under construction (max 32 instructions)."""
 
     var code: InlineArray[UInt16, 32]

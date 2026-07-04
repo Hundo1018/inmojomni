@@ -39,7 +39,7 @@ comptime STATUS_DONE: UInt32 = 2
 comptime RESULT_BASE: UInt32 = MAILBOX + 0x20
 comptime PASS: UInt32 = 0x600D_0001
 comptime FAIL: UInt32 = 0xBAD0_0001
-comptime NUM_TESTS: UInt32 = 25
+comptime NUM_TESTS: UInt32 = 26
 
 
 def report(idx: UInt32, ok: Bool):
@@ -453,6 +453,45 @@ def test_pio_sideset() -> Bool:
     return edges >= 6
 
 
+def _ct_square() -> Asm:
+    var a = Asm()
+    a.side_set(1)
+    a.nop(side=1, delay=3)
+    a.nop(side=0, delay=3)
+    return a^
+
+
+def test_pio_comptime() -> Bool:
+    # The program is assembled at COMPILE time: `comptime assert` makes
+    # an invalid program a build error, and the two instruction words
+    # below are flash constants, not runtime computation.
+    comptime PROG = _ct_square()
+    comptime assert PROG.len == 2, "program must be 2 instructions"
+    comptime assert PROG.unresolved() == 0, "labels must all be bound"
+
+    var pin = Pin[17]()
+    pin.set_function(Function.PIO0)
+    var sm = StateMachine[0, 3]()
+    sm.load(PROG)
+    sm.set_sideset_pins(17)
+    sm.set_set_pins(17, 1)
+    sm.exec(0xE081)  # set pindirs, 1
+    sm.set_clkdiv(1200)
+    sm.enable()
+
+    var last = pin.read()
+    var edges: UInt32 = 0
+    var start = time_us()
+    while time_us() - start < 3000:
+        var now = pin.read()
+        if now != last:
+            edges += 1
+            last = now
+    sm.disable()
+    pin.set_function(Function.SIO)
+    return edges >= 6
+
+
 def test_spinlock_contention() -> Bool:
     # Both cores do LOCKED_INCS read-modify-write increments on the same
     # RAM word under hardware spinlock 0. Any mutual-exclusion failure
@@ -532,9 +571,10 @@ def start() abi("C"):
     report(19, test_adc_temp())
     report(20, test_uart_loopback())
     report(21, test_pio_sideset())
-    report(22, test_spinlock_contention())
-    report(23, test_fifo_pingpong())
-    report(24, test_multicore())  # last: leaves core 1 heartbeating
+    report(22, test_pio_comptime())
+    report(23, test_spinlock_contention())
+    report(24, test_fifo_pingpong())
+    report(25, test_multicore())  # last: leaves core 1 heartbeating
 
     write32(MAILBOX + 0x04, STATUS_DONE)
 

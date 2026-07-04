@@ -17,13 +17,19 @@
 - [ ] I²C/SPI 驅動(需外部裝置驗證,等材料)
 - [x] PIO v2(部分):side-set(含 optional/pindirs)、前向標籤 ——
       2026-07-04 完成,實機驗證(編碼檢查 + side-set 方波邊緣計數)
-- [ ] PIO comptime 組譯(程式進 flash 常數)
+- [x] PIO comptime 組譯 —— 2026-07-04 完成(`comptime PROG = make()`,
+      指令字成為 flash 常數;`comptime assert` 讓非法程式變編譯錯誤;
+      host 單元測試釘住編碼 + 實機測試跑 comptime 組譯的程式)
 - [x] 雙核心啟動 —— 2026-07-04 完成(`pico.multicore.launch()`,PSM 重置 +
       bootrom FIFO 握手 + timeout,core1 跑 Mojo 實機驗證)
 - [x] 雙核心同步原語 —— 2026-07-04 完成(`pico.sync.Spinlock[N]` 硬體
       spinlock,雙核 2×20k 競爭遞增精確 40000;`multicore.fifo_push/pop`
       核間訊息,乒乓測試實機驗證)
-- [ ] 韌體瘦身:assert 路徑替換為輕量 trap,目標 blink < 600 B
+- [ ] 韌體瘦身(已調查 2026-07-04):blink 780 B = boot2 256 + 向量表 192
+      + core1 meta 8 + crt0 ~76 + mojo_main 248。mojo_main 內:常數池 44 B
+      (11 個週邊位址)+ sleep 迴圈 4× 展開 ~24 B + 時脈初始化。-Oz 無效。
+      要 <600 B 需把 mmio/init 重構為 base+offset 定址(動全 SDK,
+      會影響 benchmark 暫存器壓力)——擱置,等有明確需求再做
 
 ## 中期
 

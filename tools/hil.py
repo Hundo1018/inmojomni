@@ -44,6 +44,7 @@ TEST_NAMES = [
     "ADC temp sensor (plausible + stable)",
     "UART0 internal loopback (LBE)",
     "PIO side-set + forward label (edge count)",
+    "PIO comptime-assembled program (flash constant)",
     "spinlock: 2x20k contended increments == 40000",
     "inter-core FIFO ping-pong (5 rounds)",
     "core 1 launched into Mojo (flag + heartbeat)",

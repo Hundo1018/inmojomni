@@ -48,18 +48,20 @@ def stage(name: str, fails: list[str]):
 
 def mojo_tool(*args: str, capture: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
-        [str(MOJO), "run", "-I", "tools", *args],
+        [str(MOJO), "run", "-I", "tools", "-I", "src", *args],
         cwd=ROOT, capture_output=capture, text=True,
     )
 
 
 def run_host_unit() -> list[str]:
-    res = mojo_tool("tests/host/test_retarget.mojo")
-    if res.stdout.strip():
-        print(res.stdout.rstrip())
-    if res.returncode != 0:
-        return ["host-unit failures:\n" + res.stderr.strip()[-2000:]]
-    return []
+    fails = []
+    for test in sorted((ROOT / "tests/host").glob("*.mojo")):
+        res = mojo_tool(str(test.relative_to(ROOT)))
+        if res.stdout.strip():
+            print(res.stdout.rstrip())
+        if res.returncode != 0:
+            fails.append(f"{test.name}:\n" + res.stderr.strip()[-2000:])
+    return fails
 
 
 def run_compile_fail() -> list[str]:

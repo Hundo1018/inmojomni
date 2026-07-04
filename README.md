@@ -49,7 +49,7 @@ def start() abi("C"):
 - **Tiny binaries.** 780 B blink including the 256 B second-stage bootloader,
   192 B vector table and dual-core launch metadata. Registers defined in Mojo fold to immediates; the register
   map has no runtime footprint.
-- **Hardware-in-the-loop test suite.** 25 on-target tests (arithmetic, u64,
+- **Hardware-in-the-loop test suite.** 26 on-target tests (arithmetic, u64,
   soft-float, SIMD, GPIO loopback/pulls/events/interrupts, timer, PIO with
   side-set, NVIC, RTT, PWM, ADC, UART, dual-core launch, hardware spinlocks,
   inter-core FIFO) report through a RAM mailbox read back over SWD.
@@ -194,7 +194,22 @@ sm.enable()                    # the CPU can now sleep; PIO drives the LED
 Supported today: SET, JMP (all conditions), WAIT, OUT, PULL, MOV, NOP, delay
 cycles, **side-set** (`asm.side_set(n)` + `side=` on any instruction, optional
 and pindirs modes included), **forward labels** (`asm.future()` / `asm.bind()`),
-clock dividers, wrap, `exec()`, TX FIFO, `pc()`. A complete example is
+clock dividers, wrap, `exec()`, TX FIFO, `pc()`.
+
+The assembler also runs at **compile time**: assign the program to a
+`comptime` value and the instruction words become flash constants, with
+`comptime assert` turning invalid programs into build errors:
+
+```mojo
+comptime PROG = make_program()               # assembled during compilation
+comptime assert PROG.unresolved() == 0       # unbound label = build error
+sm.load(PROG)
+```
+
+Instruction encodings are pinned by host-side unit tests
+([tests/host/test_pio_asm.mojo](tests/host/test_pio_asm.mojo)); hardware
+behavior (including a comptime-assembled program) by the on-target suite.
+A complete example is
 [examples/pio_blink.mojo](examples/pio_blink.mojo), verified on hardware with the
 CPU idle.
 
@@ -330,10 +345,10 @@ probe is present.
 
 | Stage | What it checks |
 |---|---|
-| host-unit | IR retarget rules against synthetic new-LLVM syntax, then `opt -verify`; volatile-op count preservation; boot2 CRC self-check |
+| host-unit | IR retarget rules against synthetic new-LLVM syntax, then `opt -verify`; volatile-op count preservation; boot2 CRC self-check; PIO assembler encodings incl. side-set, forward-label fixups and comptime==runtime equivalence |
 | compile-fail | `Pin[30]()` must be rejected at compile time |
 | build+static | Three firmware builds; ELF verification (boot2 CRC32, vector table, memory bounds); DWARF line tables present |
-| hw-mailbox | 25 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events/interrupts, timer, PIO incl. side-set + forward labels, NVIC dispatch, RTT, PWM, ADC temperature, UART loopback, dual-core launch, contended spinlocks, inter-core FIFO |
+| hw-mailbox | 26 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events/interrupts, timer, PIO incl. side-set + forward labels + comptime assembly, NVIC dispatch, RTT, PWM, ADC temperature, UART loopback, dual-core launch, contended spinlocks, inter-core FIFO |
 | hw-rtt | RTT control block and message read back over SWD, exactly as an RTT host tool would |
 | hw-timer-rate | Hardware timer measures ≈1 MHz against the host clock |
 | hw-dap-debug | Full F5 experience over the DAP protocol: breakpoint hits, stepping, scopes, memory reads |
@@ -401,8 +416,6 @@ docs/                BENCHMARKS.md, design notes
 
 - No I²C, SPI, DMA or USB drivers yet; UART is polled TX/RX only (no
   interrupts, no RX ring buffer).
-- PIO programs assemble at run time (a few µs); compile-time assembly is
-  planned.
 - The toolchain tracks Mojo *nightly*; a compiler update can require a new
   retarget rule (mechanical, test-guarded, but a moving target).
 
