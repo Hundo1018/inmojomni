@@ -11,7 +11,7 @@
 
 /* --- second-stage bootloader, checksummed, exactly 256 bytes ------- */
 .section .boot2, "a"
-.incbin "runtime/boot2.bin"
+.incbin "build/boot2.bin"   /* generated from source: tools/boot2.mojo */
 
 /* --- vector table at 0x10000100 ------------------------------------ */
 .section .vector_table, "a"

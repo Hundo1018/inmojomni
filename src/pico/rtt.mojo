@@ -107,7 +107,7 @@ def write_u32(v: UInt32):
 def write_hex(v: UInt32):
     """Append `0x` + 8 hex digits."""
     var wr = read32(_UP_WROFF)
-    if 10 > _room(wr):
+    if UInt32(10) > _room(wr):
         return
     wr = _put(wr, 48)  # '0'
     wr = _put(wr, 120)  # 'x'

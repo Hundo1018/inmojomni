@@ -88,14 +88,21 @@ four languages, for every workload.
 
 ## Binary size (measured)
 
+All firmwares below share the identical rig — crt0.S, link.ld, 256 B boot2,
+192 B vector table, dual-core launch metadata, and the same clock bring-up —
+so the size comparison is apples to apples. The blink counterparts implement
+exactly the behavior of `src/main.mojo`; reproduce with `pixi run sizes`.
+
 | Firmware | .text | Notes |
 |---|---:|---|
-| Mojo blink (this project) | **780 B** | includes 256 B boot2, 192 B vector table, dual-core launch metadata |
-| C benchmark (gcc) | 4,916 B | 9 workloads + clock bring-up |
-| Rust benchmark | 6,386 B | same, plus compiler_builtins intrinsics |
-| Mojo benchmark | 6,608 B | same, plus stdlib assert machinery (below) |
-| C benchmark (clang) | 7,420 B | same `bench.c` as gcc; clang unrolls/aligns more aggressively |
-| Rust blink (pico-drone, release) | 7,844 B | rp-pico HAL + defmt logging; **not a minimal baseline**, order-of-magnitude reference only |
+| blink — C (gcc -O2) | 712 B | gcc leaves the wait loops rolled |
+| blink — **Mojo** | **780 B** | identical size to same-backend C |
+| blink — C (clang -O2) | 780 B | LLVM unrolls the timer wait loop |
+| blink — Rust (opt-level=2) | 784 B | |
+| benchmark — C (gcc) | 4,916 B | 9 workloads + clock bring-up |
+| benchmark — Rust | 6,386 B | same, plus compiler_builtins intrinsics |
+| benchmark — Mojo | 6,608 B | same, plus stdlib assert machinery (below) |
+| benchmark — C (clang) | 7,420 B | same `bench.c` as gcc; clang unrolls/aligns more aggressively |
 
 **The cost of safety:** once bounds-checked standard-library features (such as
 `InlineArray` indexing) are used, Mojo firmware grows by roughly 1.5–5 KB of

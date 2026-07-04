@@ -22,6 +22,7 @@ from std.subprocess import run
 from std.sys import argv
 
 from retarget import CPU, DATALAYOUT_MCU, TRIPLE_IR, TRIPLE_MCU, retarget_text
+from boot2 import build_boot2
 
 
 def sh(cmd: String) raises -> String:
@@ -139,7 +140,8 @@ def build(main_mojo: String, name: String, debug: Bool) raises -> String:
         _ = shx(String("opt -O2 ") + ir_arm + " -o " + ir_opt)
         _ = shx(String("llc -O2") + mcu_flags + ir_opt + " -o " + fw_obj)
 
-    print("[4/4] assemble crt0 + link")
+    print("[4/4] boot2 from source + assemble crt0 + link")
+    _ = build_boot2()
     var gcc = String("arm-none-eabi-gcc -mcpu=") + CPU + " -mthumb"
     _ = shx(gcc + " -c runtime/crt0.S -o " + crt0_obj)
     _ = shx(

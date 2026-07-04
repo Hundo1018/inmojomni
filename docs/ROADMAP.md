@@ -36,7 +36,7 @@
 - [ ] **RP2350 / Pico 2(RISC-V)原生編譯**——免 retarget,Mojo 直出;
       多晶片參數化架構已設計並有可編譯原型:[MULTICHIP.md](MULTICHIP.md)
 - [ ] DMA、USB device(CDC serial → `print()` 到 USB)
-- [ ] `pico-mojo new` 專案模板:三行指令從零到第一次 blink
+- [ ] `inmojomni new` 專案模板:三行指令從零到第一次 blink
 - [ ] WS2812 / SSD1306 / MPU6050 驅動(Mojo trait 風格 driver 生態的種子)
 
 ## 遠期
@@ -56,7 +56,7 @@
 | ★★☆ | WS2812 燈條(8–16 顆)| PIO 的殺手級 demo(800 kHz 精準時序) |
 | ★★☆ | 麵包板 + 杜邦線 + 按鈕×4 + LED×8 + 電阻包(220Ω/1k/10k) | GPIO 事件/外部中斷/去彈跳的真實外部訊號測試 |
 | ★☆☆ | SSD1306 0.96" OLED(I²C)| I²C driver + 畫面 = 最有感的 demo |
-| ★☆☆ | MPU6050 模組 | I²C 讀感測器(pico-drone 的方向,想繼續就買) |
+| ★☆☆ | MPU6050 模組 | I²C 讀感測器驅動的驗證載具 |
 | ★☆☆ | B10K 電位器 | ADC 驗證 |
 | ★☆☆ | SG90 舵機 | PWM 驗證 |
 | ☆☆☆ | ESP32-C3 devkit / STM32 Nucleo-64 | 多晶片架構的第二、三個目標 |

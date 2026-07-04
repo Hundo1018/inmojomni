@@ -10,3 +10,6 @@ __pycache__/
 
 # mojo compiler traces
 kgen.trace.json*
+
+# pixi build output
+*.conda

@@ -110,7 +110,7 @@ def run_debug_session(elf: Path, main_src: Path, bp_pattern: str) -> list[str]:
         dap = Dap(port)
         dap.request("initialize", {
             "adapterID": "probe-rs-debug",
-            "clientName": "pico-mojo-hil",
+            "clientName": "inmojomni-hil",
             "supportsMemoryReferences": True,
         })
         launch_seq = dap.send("attach", {

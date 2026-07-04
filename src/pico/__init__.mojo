@@ -1,4 +1,4 @@
-"""pico-mojo SDK: bare-metal RP2040 in pure Mojo."""
+"""inmojomni SDK: bare-metal RP2040 in pure Mojo."""
 
 from pico.board import init
 from pico.gpio import Drive, Event, Function, Pin

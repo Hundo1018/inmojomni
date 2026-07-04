@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""pico-mojo test orchestrator: `pixi run test`.
+"""inmojomni test orchestrator: `pixi run test`.
 
 Stages (later stages assume earlier ones passed):
   1. host-unit       IR downgrade pass + boot2 CRC (tests/host, Mojo)

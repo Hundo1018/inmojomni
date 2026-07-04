@@ -1,4 +1,4 @@
-"""RP2040 register map (the subset pico-mojo uses).
+"""RP2040 register map (the subset inmojomni uses).
 
 All addresses and bit positions come from the RP2040 datasheet.
 Everything here is `comptime`, so the register map costs zero bytes

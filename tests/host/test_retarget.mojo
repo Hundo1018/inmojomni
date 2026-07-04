@@ -9,6 +9,7 @@ Run: mojo run -I tools tests/host/test_retarget.mojo
 
 from std.subprocess import run
 
+from boot2 import build_boot2
 from check_elf import crc32_mpeg2
 from retarget import CPU, DATALAYOUT_MCU, TRIPLE_MCU, retarget_text
 
@@ -186,27 +187,41 @@ def test_debug_records() raises:
     _ok("debug output passes the LLVM verifier")
 
 
-def test_boot2_crc() raises:
-    var f = open("runtime/boot2.bin", "r")
-    var blob = f.read_bytes()
-    f.close()
-    _assert(len(blob) == 256, "boot2.bin must be 256 bytes")
+def test_boot2_from_source() raises:
+    # Rebuild boot2 from the vendored pico-sdk source and require it to
+    # be byte-identical to the golden reference blob — provenance and
+    # checksum in one regression test.
+    _ = build_boot2()
+    var gen_f = open("build/boot2.bin", "r")
+    var gen = gen_f.read_bytes()
+    gen_f.close()
+    var gold_f = open("runtime/boot2.bin", "r")
+    var gold = gold_f.read_bytes()
+    gold_f.close()
+    _assert(len(gen) == 256, "generated boot2 must be 256 bytes")
+    _assert(len(gold) == 256, "golden boot2 must be 256 bytes")
+    for i in range(256):
+        if gen[i] != gold[i]:
+            raise Error(
+                "generated boot2 differs from golden at byte "
+                + String(i)
+            )
     var want = (
-        UInt32(blob[252])
-        | (UInt32(blob[253]) << 8)
-        | (UInt32(blob[254]) << 16)
-        | (UInt32(blob[255]) << 24)
+        UInt32(gen[252])
+        | (UInt32(gen[253]) << 8)
+        | (UInt32(gen[254]) << 16)
+        | (UInt32(gen[255]) << 24)
     )
     _assert(
-        crc32_mpeg2(blob, 252) == want,
-        "boot2 CRC32-MPEG2 mismatch with shipped blob",
+        crc32_mpeg2(gen, 252) == want,
+        "generated boot2 CRC32-MPEG2 invalid",
     )
-    _ok("boot2 CRC matches shipped blob")
+    _ok("boot2 built from pico-sdk source == golden blob, CRC valid")
 
 
 def main() raises:
     _ = run("mkdir -p build")
     test_retarget_rules()
     test_debug_records()
-    test_boot2_crc()
+    test_boot2_from_source()
     print("host-unit: all assertions passed")

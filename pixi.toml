@@ -6,9 +6,31 @@ platforms = ["linux-64"]
 version = "0.1.0"
 preview = ["pixi-build"]
 
-# This repo is pico-mojo: bare-metal RP2040 firmware written in Mojo.
-# It was formerly the pico-mojo/ subdirectory of the inmojomni monorepo;
-# the ludens-engine subsystems live in their own repo at ~/Projects/ludens-engine.
+# inmojomni: bare-metal RP2040 firmware and SDK written in Mojo.
+# The `pico` Mojo package is installable as a dependency:
+#   pixi add --git https://github.com/Hundo1018/inmojomni.git inmojomni
+
+[package]
+name = "inmojomni"
+version = "0.1.0"
+description = "Bare-metal RP2040 SDK written in Mojo (import as `pico`)"
+license = "MIT"
+
+[package.build]
+backend = { name = "pixi-build-mojo", version = "*" }
+
+[package.build.config.pkg]
+name = "pico"
+path = "src/pico"
+
+[package.host-dependencies]
+mojo-compiler = ">=1.0.0b3.dev2026070306,<2"
+
+[package.build-dependencies]
+mojo-compiler = ">=1.0.0b3.dev2026070306,<2"
+
+[package.run-dependencies]
+mojo-compiler = ">=1.0.0b3.dev2026070306,<2"
 
 # Product tooling (build pipeline, ELF verifier, benchmark driver) is
 # Mojo; Python remains only for test orchestration and the DAP client.
@@ -22,6 +44,9 @@ test = "python tools/run_tests.py"
 test-host = "python tools/run_tests.py --no-hw"
 bench = "mojo run -I tools tools/bench.mojo"
 chart = "mojo run -I tools tools/chart.mojo"
+sizes = "mojo run -I tools tools/sizes.mojo"
+# .vscode/rp2040.svd provenance: pico-sdk (BSD-3-Clause); refresh with:
+svd-update = "curl -sf https://raw.githubusercontent.com/raspberrypi/pico-sdk/2.1.0/src/rp2040/hardware_regs/RP2040.svd -o .vscode/rp2040.svd"
 
 [dependencies]
 modular = ">=26.4.0.dev2026051806,<27"

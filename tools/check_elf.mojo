@@ -1,4 +1,4 @@
-"""Static verifier for pico-mojo firmware ELFs.
+"""Static verifier for inmojomni firmware ELFs.
 
 Pure-Mojo ELF32 parsing, no dependencies. Checks everything that can
 be checked without hardware:

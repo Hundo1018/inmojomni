@@ -1,4 +1,4 @@
-"""Chip/board descriptors — the road to multi-MCU pico-mojo.
+"""Chip/board descriptors — the road to multi-MCU inmojomni.
 
 A chip is a *compile-time value*: a struct conforming to `Chip`, whose
 associated constants describe what the silicon has. SDK types take the

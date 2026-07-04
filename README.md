@@ -1,4 +1,4 @@
-# pico-mojo
+# inmojomni
 
 [![CI](https://github.com/Hundo1018/inmojomni/actions/workflows/ci.yml/badge.svg)](https://github.com/Hundo1018/inmojomni/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -46,9 +46,10 @@ def start() abi("C"):
 - **Real debugging.** VS Code F5 gives breakpoints, stepping, registers, memory and
   SVD peripheral views in `.mojo` sources, via `probe-rs`. The full debug path is
   exercised by an automated DAP-protocol test.
-- **Tiny binaries.** 780 B blink including the 256 B second-stage bootloader,
-  192 B vector table and dual-core launch metadata. Registers defined in Mojo fold to immediates; the register
-  map has no runtime footprint.
+- **Tiny binaries, same size as C.** The complete blink is 780 B — byte-for-
+  byte the size of the same-backend C blink on the identical rig (Rust: 784 B,
+  gcc: 712 B; `pixi run sizes` reproduces the comparison). Registers defined
+  in Mojo fold to immediates; the register map has no runtime footprint.
 - **Hardware-in-the-loop test suite.** 26 on-target tests (arithmetic, u64,
   soft-float, SIMD, GPIO loopback/pulls/events/interrupts, timer, PIO with
   side-set, NVIC, RTT, PWM, ADC, UART, dual-core launch, hardware spinlocks,
@@ -101,6 +102,23 @@ curl -fsSL https://pixi.sh/install.sh | bash
 # optional, only for the Rust benchmark baseline:
 rustup target add thumbv6m-none-eabi
 ```
+
+### Using the SDK as a library
+
+The `pico` Mojo package installs into any pixi project straight from git —
+no clone needed:
+
+```sh
+pixi init myproject && cd myproject
+pixi workspace channel add https://conda.modular.com/max-nightly
+pixi add --git https://github.com/Hundo1018/inmojomni.git inmojomni
+```
+
+Then `import pico` (or `from pico.pio import Asm`, ...) in your Mojo code.
+The packaged library serves host-side tooling — PIO program generation and
+verification, register maps, chip metadata. Building flashable firmware also
+needs this repo's IR-retarget pipeline and runtime files, so firmware
+development uses a clone:
 
 ### Build and run
 

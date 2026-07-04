@@ -2,21 +2,21 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "pico-mojo: build+flash (debug)",
+            "label": "inmojomni: build+flash (debug)",
             "type": "shell",
             "command": "pixi run flash-debug",
             "problemMatcher": [],
             "group": "build"
         },
         {
-            "label": "pico-mojo: build-debug",
+            "label": "inmojomni: build-debug",
             "type": "shell",
             "command": "pixi run build-debug",
             "problemMatcher": [],
             "group": "build"
         },
         {
-            "label": "pico-mojo: build",
+            "label": "inmojomni: build",
             "type": "shell",
             "command": "pixi run build",
             "problemMatcher": [],
@@ -26,13 +26,13 @@
             }
         },
         {
-            "label": "pico-mojo: flash",
+            "label": "inmojomni: flash",
             "type": "shell",
             "command": "pixi run flash",
             "problemMatcher": []
         },
         {
-            "label": "pico-mojo: test",
+            "label": "inmojomni: test",
             "type": "shell",
             "command": "pixi run test",
             "problemMatcher": [],

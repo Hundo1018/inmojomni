@@ -1,4 +1,4 @@
-/* RP2040 (Raspberry Pi Pico) linker script for pico-mojo firmware. */
+/* RP2040 (Raspberry Pi Pico) linker script for inmojomni firmware. */
 
 MEMORY {
     BOOT2 (rx)  : ORIGIN = 0x10000000, LENGTH = 0x100

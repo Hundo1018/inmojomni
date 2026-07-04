@@ -10,10 +10,10 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "preLaunchTask": "pico-mojo: build+flash (debug)",
+            "preLaunchTask": "inmojomni: build+flash (debug)",
             "type": "probe-rs-debug",
             "request": "attach",
-            "name": "pico-mojo (flash + debug)",
+            "name": "inmojomni (flash + debug)",
             "cwd": "${workspaceFolder}",
             "chip": "rp2040",
             "connectUnderReset": false,
@@ -35,10 +35,10 @@
         {
             // Upstream-bug repro config: breakpoints set before start
             // will NOT hit (toggle them once after it stops to fix).
-            "preLaunchTask": "pico-mojo: build-debug",
+            "preLaunchTask": "inmojomni: build-debug",
             "type": "probe-rs-debug",
             "request": "launch",
-            "name": "pico-mojo (launch — probe-rs BP bug, avoid)",
+            "name": "inmojomni (launch — probe-rs BP bug, avoid)",
             "cwd": "${workspaceFolder}",
             "chip": "rp2040",
             "connectUnderReset": false,
