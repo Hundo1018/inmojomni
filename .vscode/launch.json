@@ -1,55 +1,65 @@
 {
-    // Use IntelliSense to learn about possible attributes.
-    // Hover to view descriptions of existing attributes.
-    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    // F5 = build debug firmware + flash + attach. Breakpoints in .mojo
+    // files, stepping, registers, memory and the RP2040 SVD all work.
+    //
+    // Why "attach" and not "launch": probe-rs's launch flow arms
+    // breakpoints while the RP2040 core is halted in the bootrom, where
+    // they never take effect (verified upstream bug — breakpoints set
+    // while the core runs application code hit every time). The
+    // preLaunchTask does the flashing instead, then we attach.
     "version": "0.2.0",
     "configurations": [
         {
-            "type": "mojo-lldb",
-            "request": "launch",
-            "name": "Mojo: Debug current Mojo file",
-            "description": "Launch and debug the Mojo file that is active on the editor when the debug session starts.",
-            "mojoFile": "${file}",
-            "args": [],
-            "env": [],
-            "cwd": "${workspaceFolder}",
-            "runInTerminal": false
-        },
-        {
-            "type": "mojo-lldb",
-            "request": "launch",
-            "name": "Mojo: Debug Mojo file",
-            "description": "Launch and debug a Mojo file given its path.",
-            "mojoFile": "${workspaceFolder}/<your_file.mojo>",
-            "args": [],
-            "env": [],
-            "cwd": "${workspaceFolder}",
-            "runInTerminal": false
-        },
-        {
-            "type": "mojo-lldb",
-            "request": "launch",
-            "name": "Mojo: Debug binary",
-            "description": "Launch and debug a precompiled binary given its path.",
-            "program": "${workspaceFolder}/<your_binary>",
-            "args": [],
-            "env": [],
-            "cwd": "${workspaceFolder}",
-            "runInTerminal": false
-        },
-        {
-            "type": "mojo-lldb",
+            "preLaunchTask": "pico-mojo: build+flash (debug)",
+            "type": "probe-rs-debug",
             "request": "attach",
-            "name": "Mojo: Attach to process",
-            "description": "Search for a process to attach the debugger to.",
-            "pid": "${command:pickProcessToAttach}"
+            "name": "pico-mojo (flash + debug)",
+            "cwd": "${workspaceFolder}",
+            "chip": "rp2040",
+            "connectUnderReset": false,
+            "speed": 4000,
+            "runtimeExecutable": "probe-rs",
+            "runtimeArgs": [
+                "dap-server"
+            ],
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "${workspaceFolder}/build/firmware-debug.elf",
+                    "svdFile": "${workspaceFolder}/.vscode/rp2040.svd"
+                }
+            ],
+            "consoleLogLevel": "Info",
+            "wireProtocol": "Swd"
         },
-        // {
-        //     "name": "Run MyToolchain",
-        //     "type": "mojo-lldb",
-        //     "request": "launch",
-        //     "program": "${workspaceFolder}",
-        //     "preLaunchTask": "Full Pipeline"
-        // }
+        {
+            // Upstream-bug repro config: breakpoints set before start
+            // will NOT hit (toggle them once after it stops to fix).
+            "preLaunchTask": "pico-mojo: build-debug",
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "name": "pico-mojo (launch — probe-rs BP bug, avoid)",
+            "cwd": "${workspaceFolder}",
+            "chip": "rp2040",
+            "connectUnderReset": false,
+            "speed": 4000,
+            "runtimeExecutable": "probe-rs",
+            "runtimeArgs": [
+                "dap-server"
+            ],
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "haltAfterReset": true
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "${workspaceFolder}/build/firmware-debug.elf",
+                    "svdFile": "${workspaceFolder}/.vscode/rp2040.svd"
+                }
+            ],
+            "consoleLogLevel": "Info",
+            "wireProtocol": "Swd"
+        }
     ]
 }

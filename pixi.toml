@@ -6,11 +6,23 @@ platforms = ["linux-64"]
 version = "0.1.0"
 preview = ["pixi-build"]
 
-# The ludens-engine subsystems (ECS, geometry, physics, collision, scheduler,
-# spatial, harness, oop) now live in their own repo at ~/Projects/ludens-engine.
-# What remains here are the standalone experiments: concurrent/, logic/, rx/.
+# This repo is pico-mojo: bare-metal RP2040 firmware written in Mojo.
+# It was formerly the pico-mojo/ subdirectory of the inmojomni monorepo;
+# the ludens-engine subsystems live in their own repo at ~/Projects/ludens-engine.
+
+# Product tooling (build pipeline, ELF verifier, benchmark driver) is
+# Mojo; Python remains only for test orchestration and the DAP client.
 [tasks]
+build = "mojo run -I tools tools/build.mojo"
+build-debug = "mojo run -I tools tools/build.mojo --debug"
+flash = "mojo run -I tools tools/build.mojo --flash"
+flash-debug = "mojo run -I tools tools/build.mojo --debug --flash"
+uf2 = "mojo run -I tools tools/build.mojo --uf2"
+test = "python tools/run_tests.py"
+test-host = "python tools/run_tests.py --no-hw"
+bench = "mojo run -I tools tools/bench.mojo"
+chart = "mojo run -I tools tools/chart.mojo"
 
 [dependencies]
 modular = ">=26.4.0.dev2026051806,<27"
-mojo = ">=1.0.0b2.dev2026051806,<2"
+mojo = ">=1.0.0b3.dev2026070306,<2"

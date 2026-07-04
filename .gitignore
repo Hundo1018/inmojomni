@@ -1,1 +1,12 @@
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# build artifacts
 build/
+
+# python
+__pycache__/
+
+# mojo compiler traces
+kgen.trace.json*

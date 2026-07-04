@@ -1,0 +1,212 @@
+"""GPIO driven through SIO (single-cycle I/O) — full pin control.
+
+The pin number is a *compile-time parameter*: `Pin[25]` is its own type,
+an invalid pin number is a compile error, and every operation folds to
+one or two instructions with the mask baked in as an immediate.
+
+Pad-electrical settings (pulls, drive strength, slew, Schmitt) use the
+RP2040 atomic SET/CLR register aliases, so they are race-free without
+read-modify-write.
+"""
+
+from pico.mmio import read32, write32, write32_clr, write32_set
+from pico.rp2040 import (
+    FUNCSEL_SIO,
+    IO_BANK0_BASE,
+    IO_BANK0_INTR0,
+    PADS_BANK0_BASE,
+    PADS_DRIVE_LSB,
+    PADS_DRIVE_MASK,
+    PADS_IE,
+    PADS_OD,
+    PADS_PDE,
+    PADS_PUE,
+    PADS_SCHMITT,
+    PADS_SLEWFAST,
+    SIO_GPIO_IN,
+    SIO_GPIO_OE,
+    SIO_GPIO_OE_CLR,
+    SIO_GPIO_OE_SET,
+    SIO_GPIO_OUT,
+    SIO_GPIO_OUT_CLR,
+    SIO_GPIO_OUT_SET,
+    SIO_GPIO_OUT_XOR,
+)
+
+
+struct Function:
+    """IO_BANK0 FUNCSEL values (datasheet §2.19.2). Which peripheral
+    instance a value selects depends on the pin — see pins.mojo."""
+
+    comptime SPI: UInt32 = 1
+    comptime UART: UInt32 = 2
+    comptime I2C: UInt32 = 3
+    comptime PWM: UInt32 = 4
+    comptime SIO: UInt32 = 5
+    comptime PIO0: UInt32 = 6
+    comptime PIO1: UInt32 = 7
+    comptime GPCK: UInt32 = 8  # clock in/out (GPIO20-25 only)
+    comptime USB: UInt32 = 9   # VBUS det / VBUS en / overcurrent det
+    comptime NONE: UInt32 = 0x1F
+
+
+struct Drive:
+    """Pad output drive strength."""
+
+    comptime MA_2: UInt32 = 0
+    comptime MA_4: UInt32 = 1  # reset default
+    comptime MA_8: UInt32 = 2
+    comptime MA_12: UInt32 = 3
+
+
+struct Event:
+    """GPIO interrupt/event bits, 4 per pin (datasheet §2.19.6.1).
+    Edge bits are latched and must be acknowledged; level bits are raw."""
+
+    comptime LEVEL_LOW: UInt32 = 1
+    comptime LEVEL_HIGH: UInt32 = 2
+    comptime EDGE_LOW: UInt32 = 4
+    comptime EDGE_HIGH: UInt32 = 8
+    comptime ALL: UInt32 = 0xF
+
+
+struct Pin[N: Int](TrivialRegisterPassable):
+    """GPIO pin `N`, checked at compile time (RP2040 has GPIO0..GPIO29)."""
+
+    def __init__(out self):
+        comptime assert 0 <= Self.N and Self.N < 30, (
+            "RP2040 only has GPIO0..GPIO29"
+        )
+        self.set_function(FUNCSEL_SIO)
+
+    # --- addressing helpers (all fold to constants) -----------------
+
+    @always_inline
+    def _mask(self) -> UInt32:
+        return UInt32(1) << UInt32(Self.N)
+
+    @always_inline
+    def _ctrl(self) -> UInt32:
+        return IO_BANK0_BASE + UInt32(8 * Self.N + 4)
+
+    @always_inline
+    def _pad(self) -> UInt32:
+        return PADS_BANK0_BASE + UInt32(4 + 4 * Self.N)
+
+    @always_inline
+    def _intr(self) -> UInt32:
+        return IO_BANK0_INTR0 + UInt32(4 * (Self.N // 8))
+
+    @always_inline
+    def _event_shift(self) -> UInt32:
+        return UInt32(4 * (Self.N % 8))
+
+    # --- function select ---------------------------------------------
+
+    def set_function(self, f: UInt32):
+        write32(self._ctrl(), f)
+
+    def get_function(self) -> UInt32:
+        return read32(self._ctrl()) & 0x1F
+
+    # --- direction ----------------------------------------------------
+
+    def make_output(self):
+        write32(SIO_GPIO_OE_SET, self._mask())
+
+    def make_input(self):
+        write32(SIO_GPIO_OE_CLR, self._mask())
+        self.input_enable(True)
+
+    def is_output(self) -> Bool:
+        return (read32(SIO_GPIO_OE) & self._mask()) != 0
+
+    # --- output level ---------------------------------------------------
+
+    def high(self):
+        write32(SIO_GPIO_OUT_SET, self._mask())
+
+    def low(self):
+        write32(SIO_GPIO_OUT_CLR, self._mask())
+
+    def toggle(self):
+        write32(SIO_GPIO_OUT_XOR, self._mask())
+
+    def write(self, level: Bool):
+        if level:
+            self.high()
+        else:
+            self.low()
+
+    def read_output(self) -> Bool:
+        """What we are driving (SIO.GPIO_OUT), not what the pad sees."""
+        return (read32(SIO_GPIO_OUT) & self._mask()) != 0
+
+    # --- input ----------------------------------------------------------
+
+    def read(self) -> Bool:
+        """Read the actual pad state (input enable is on by default, so
+        this also reads back what an output pin is driving)."""
+        return (read32(SIO_GPIO_IN) & self._mask()) != 0
+
+    # --- pad electrical control (atomic set/clr, race-free) -------------
+
+    def pull_up(self):
+        write32_set(self._pad(), PADS_PUE)
+        write32_clr(self._pad(), PADS_PDE)
+
+    def pull_down(self):
+        write32_set(self._pad(), PADS_PDE)
+        write32_clr(self._pad(), PADS_PUE)
+
+    def pull_none(self):
+        write32_clr(self._pad(), PADS_PUE | PADS_PDE)
+
+    def bus_keep(self):
+        """Weakly hold the last driven level (PUE+PDE together)."""
+        write32_set(self._pad(), PADS_PUE | PADS_PDE)
+
+    def set_drive(self, strength: UInt32):
+        """Drive.MA_2 / MA_4 / MA_8 / MA_12. Two atomic ops: the pad
+        passes through the weaker setting for a few ns in between."""
+        write32_clr(self._pad(), PADS_DRIVE_MASK)
+        write32_set(self._pad(), (strength << PADS_DRIVE_LSB) & PADS_DRIVE_MASK)
+
+    def schmitt(self, enable: Bool):
+        if enable:
+            write32_set(self._pad(), PADS_SCHMITT)
+        else:
+            write32_clr(self._pad(), PADS_SCHMITT)
+
+    def slew_fast(self, enable: Bool):
+        if enable:
+            write32_set(self._pad(), PADS_SLEWFAST)
+        else:
+            write32_clr(self._pad(), PADS_SLEWFAST)
+
+    def input_enable(self, enable: Bool):
+        if enable:
+            write32_set(self._pad(), PADS_IE)
+        else:
+            write32_clr(self._pad(), PADS_IE)
+
+    def output_disable(self, disable: Bool):
+        """Hard-disable the pad driver (overrides SIO output enable)."""
+        if disable:
+            write32_set(self._pad(), PADS_OD)
+        else:
+            write32_clr(self._pad(), PADS_OD)
+
+    def pad_config(self) -> UInt32:
+        """Raw pad register — for tests and debugging."""
+        return read32(self._pad())
+
+    # --- events (polled; NVIC-driven interrupts are on the roadmap) -----
+
+    def events(self) -> UInt32:
+        """Current Event bits for this pin (raw INTR register)."""
+        return (read32(self._intr()) >> self._event_shift()) & Event.ALL
+
+    def ack_events(self, mask: UInt32):
+        """Clear latched edge events (level bits clear by themselves)."""
+        write32(self._intr(), (mask & Event.ALL) << self._event_shift())
