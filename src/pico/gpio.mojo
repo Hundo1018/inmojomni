@@ -14,6 +14,8 @@ from pico.rp2040 import (
     FUNCSEL_SIO,
     IO_BANK0_BASE,
     IO_BANK0_INTR0,
+    IO_BANK0_PROC0_INTE0,
+    IO_BANK0_PROC0_INTS0,
     PADS_BANK0_BASE,
     PADS_DRIVE_LSB,
     PADS_DRIVE_MASK,
@@ -201,7 +203,7 @@ struct Pin[N: Int](TrivialRegisterPassable):
         """Raw pad register — for tests and debugging."""
         return read32(self._pad())
 
-    # --- events (polled; NVIC-driven interrupts are on the roadmap) -----
+    # --- events: polled via INTR, or routed to IO_IRQ_BANK0 (NVIC) -----
 
     def events(self) -> UInt32:
         """Current Event bits for this pin (raw INTR register)."""
@@ -210,3 +212,31 @@ struct Pin[N: Int](TrivialRegisterPassable):
     def ack_events(self, mask: UInt32):
         """Clear latched edge events (level bits clear by themselves)."""
         write32(self._intr(), (mask & Event.ALL) << self._event_shift())
+
+    def _inte(self) -> UInt32:
+        return IO_BANK0_PROC0_INTE0 + UInt32(4 * (Self.N // 8))
+
+    def _ints(self) -> UInt32:
+        return IO_BANK0_PROC0_INTS0 + UInt32(4 * (Self.N // 8))
+
+    def irq_enable(self, mask: UInt32):
+        """Route Event bits to IO_IRQ_BANK0 (processor 0). Also enable
+        the NVIC line and export a handler:
+
+            @export("isr_irq13")            # irq.IO_IRQ_BANK0
+            def on_gpio() abi("C"):
+                var pin = Pin[15]()
+                ... pin.irq_status() ...
+                pin.ack_events(Event.EDGE_HIGH)
+
+            irq.enable(irq.IO_IRQ_BANK0)
+        """
+        write32_set(self._inte(), (mask & Event.ALL) << self._event_shift())
+
+    def irq_disable(self, mask: UInt32):
+        write32_clr(self._inte(), (mask & Event.ALL) << self._event_shift())
+
+    def irq_status(self) -> UInt32:
+        """Event bits currently asserting IO_IRQ_BANK0 for this pin
+        (masked status: raw events AND-ed with irq_enable mask)."""
+        return (read32(self._ints()) >> self._event_shift()) & Event.ALL

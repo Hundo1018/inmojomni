@@ -83,17 +83,18 @@ four languages, for every workload.
    loops should be read with that in mind; the checksum equality proves the
    work done is identical.
 6. Bare metal, no interrupts: execution is deterministic (cross-run spread
-   here is 0–2 µs on most workloads).
+   here is 0–2 µs on most workloads). A later startup-code change shifted
+   every firmware by 20 bytes and reproduced all nine timings within 1 µs.
 
 ## Binary size (measured)
 
 | Firmware | .text | Notes |
 |---|---:|---|
-| Mojo blink (this project) | **760 B** | includes 256 B boot2 + 192 B vector table; ~300 B of program code |
-| C benchmark (gcc) | 4,896 B | 9 workloads + clock bring-up |
-| Rust benchmark | 6,366 B | same, plus compiler_builtins intrinsics |
-| Mojo benchmark | 6,588 B | same, plus stdlib assert machinery (below) |
-| C benchmark (clang) | 7,400 B | same `bench.c` as gcc; clang unrolls/aligns more aggressively |
+| Mojo blink (this project) | **780 B** | includes 256 B boot2, 192 B vector table, dual-core launch metadata |
+| C benchmark (gcc) | 4,916 B | 9 workloads + clock bring-up |
+| Rust benchmark | 6,386 B | same, plus compiler_builtins intrinsics |
+| Mojo benchmark | 6,608 B | same, plus stdlib assert machinery (below) |
+| C benchmark (clang) | 7,420 B | same `bench.c` as gcc; clang unrolls/aligns more aggressively |
 | Rust blink (pico-drone, release) | 7,844 B | rp-pico HAL + defmt logging; **not a minimal baseline**, order-of-magnitude reference only |
 
 **The cost of safety:** once bounds-checked standard-library features (such as
@@ -120,7 +121,7 @@ the gap. A first-hand comparison is planned once a second board is available.
 |---|---|---|---|---|
 | Memory safety | bounds checks on by default (violation → `bkpt`); `UnsafePointer` marks unsafe boundaries explicitly | none | borrow checker + unsafe boundaries | interpreter-level safety |
 | Compile-time hardware checks | `Pin[30]()` is a **compile error** (comptime assert); pins/PIO/SM are type parameters | none (fails at run time) | achievable via typestate, heavier code | none |
-| Zero-cost abstraction | measured: the `rp2040.mojo` register map folds to immediates, 760 B blink | yes (by hand) | yes | no |
+| Zero-cost abstraction | measured: the `rp2040.mojo` register map folds to immediates, 780 B blink | yes (by hand) | yes | no |
 | Predictability | no GC, no hidden allocation; some stdlib features pull in assert machinery (visible in the link map) | highest | high | GC pauses, heap fragmentation |
 | Readability | Python-like syntax with types; PIO written as method calls | macro and bit-shift heavy | expressive, steep learning curve | most approachable |
 | Debugging | F5 breakpoints/stepping/registers/SVD + RTT logging (both verified in this project) | mature | mature | mostly print |

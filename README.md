@@ -9,7 +9,7 @@
 
 No OS, no C application layer. The application and the SDK are pure Mojo; startup is
 about 60 lines of assembly and one linker script. A complete blink firmware is
-**760 bytes**, and measured performance **matches C compiled with the same LLVM
+**780 bytes**, and measured performance **matches C compiled with the same LLVM
 backend on every workload** (see [Benchmarks](#benchmarks)).
 
 ```mojo
@@ -35,21 +35,24 @@ def start() abi("C"):
 
 ## Why this is interesting
 
-- **Zero language overhead, measured.** Against C built with the same LLVM backend
-  (`clang -O2`), Mojo is within ±3% on all five benchmark workloads, with checksums
-  verified across implementations. Full methodology: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+- **Zero language overhead, measured.** Against C built with the same LLVM
+  backend (`clang -O2`) and Rust, Mojo matches register-loop workloads to the
+  microsecond and stays within ±13% on larger ones (sorting, CRC, matmul,
+  recursion) — checksums verified across all four implementations, three runs
+  each. Full methodology: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 - **Compile-time hardware safety.** GPIO pins, PIO blocks and state machines are
   type parameters. An out-of-range pin (`Pin[30]()` on the RP2040) fails to
   *compile* — a test guarantees this stays true.
 - **Real debugging.** VS Code F5 gives breakpoints, stepping, registers, memory and
   SVD peripheral views in `.mojo` sources, via `probe-rs`. The full debug path is
   exercised by an automated DAP-protocol test.
-- **Tiny binaries.** 760 B blink including the 256 B second-stage bootloader and
-  192 B vector table. Registers defined in Mojo fold to immediates; the register
+- **Tiny binaries.** 780 B blink including the 256 B second-stage bootloader,
+  192 B vector table and dual-core launch metadata. Registers defined in Mojo fold to immediates; the register
   map has no runtime footprint.
-- **Hardware-in-the-loop test suite.** 17 on-target tests (arithmetic, u64,
-  soft-float, SIMD, GPIO loopback, pulls, events, timer, PIO, NVIC interrupts,
-  RTT) report through a RAM mailbox read back over SWD.
+- **Hardware-in-the-loop test suite.** 25 on-target tests (arithmetic, u64,
+  soft-float, SIMD, GPIO loopback/pulls/events/interrupts, timer, PIO with
+  side-set, NVIC, RTT, PWM, ADC, UART, dual-core launch, hardware spinlocks,
+  inter-core FIFO) report through a RAM mailbox read back over SWD.
 - **The toolchain is Mojo, too.** The build pipeline, IR retargeting pass, ELF
   verifier and benchmark driver are Mojo programs; Python remains only as the
   test orchestrator and DAP protocol client.
@@ -95,6 +98,8 @@ Ubuntu/Debian:
 sudo apt install gcc-arm-none-eabi llvm clang openocd gdb-multiarch
 cargo install probe-rs-tools        # or see probe.rs for installers
 curl -fsSL https://pixi.sh/install.sh | bash
+# optional, only for the Rust benchmark baseline:
+rustup target add thumbv6m-none-eabi
 ```
 
 ### Build and run
@@ -112,7 +117,8 @@ pixi run flash      # build + flash over SWD; the LED starts blinking
 | `pixi run uf2` | Build `build/firmware.uf2` for BOOTSEL drag-and-drop (no probe needed) |
 | `pixi run test` | Full test suite; hardware stages are skipped when no probe is attached |
 | `pixi run test-host` | Host-only tests (no hardware required) |
-| `pixi run bench` | On-target Mojo vs C benchmark (requires probe and `clang`) |
+| `pixi run bench` | On-target Mojo vs C vs Rust benchmark (requires probe, `clang`, `rustc`) |
+| `pixi run chart` | Regenerate `docs/assets/benchmarks.svg` from the last bench run |
 | `pixi run build-debug` / `flash-debug` | Debug firmware, used by the VS Code F5 flow |
 
 To build a different entry point:
@@ -186,7 +192,9 @@ sm.enable()                    # the CPU can now sleep; PIO drives the LED
 ```
 
 Supported today: SET, JMP (all conditions), WAIT, OUT, PULL, MOV, NOP, delay
-cycles, clock dividers, wrap, `exec()`, TX FIFO, `pc()`. A complete example is
+cycles, **side-set** (`asm.side_set(n)` + `side=` on any instruction, optional
+and pindirs modes included), **forward labels** (`asm.future()` / `asm.bind()`),
+clock dividers, wrap, `exec()`, TX FIFO, `pc()`. A complete example is
 [examples/pio_blink.mojo](examples/pio_blink.mojo), verified on hardware with the
 CPU idle.
 
@@ -219,7 +227,76 @@ alarm0_arm(1000)               # fires in 1 ms
 ```
 
 Verified on hardware by an on-target test: two asynchronous ALARM0 fires
-through the NVIC while the main loop polls a counter.
+through the NVIC while the main loop polls a counter. GPIO edge/level
+events route the same way: `pin.irq_enable(Event.EDGE_HIGH)` +
+`irq.enable(irq.IO_IRQ_BANK0)`, handler exported as `isr_irq13`.
+
+### PWM (`pico.pwm`)
+
+The slice/channel for a GPIO is fixed by hardware, so `Pwm[PIN]` derives both
+at compile time; an out-of-range pin is a compile error.
+
+```mojo
+from pico.pwm import Pwm
+
+var pwm = Pwm[15]()      # slice 7 channel B, funcsel switched automatically
+pwm.set_top(999)         # 12 MHz / 1000 = 12 kHz
+pwm.set_level(500)       # 50% duty
+pwm.enable()
+```
+
+### ADC (`pico.adc`)
+
+12-bit SAR: channels 0-3 are GPIO26-29, channel 4 is the internal temperature
+sensor — `adc.read_temp_milli_c()` needs zero external parts. clk_adc runs
+from the 12 MHz crystal (no PLL in this project): conversions take 8 µs
+instead of 2 µs, same result bits.
+
+### UART (`pico.uart`)
+
+Polled PL011 driver for UART0: `uart.init(115_200)`, `write_byte`,
+`read_byte(timeout_us)`. The peripheral's internal loopback mode
+(`uart.loopback(True)`) is what lets the test suite verify TX->RX framing
+with zero wiring.
+
+### Spinlocks (`pico.sync`)
+
+The RP2040's 32 hardware spinlocks, as compile-time-checked types. Verified by
+a genuinely contended test: both cores perform 20,000 read-modify-write
+increments each on one RAM word under `Spinlock[0]`; the total is exactly
+40,000 every run.
+
+```mojo
+from pico.sync import Spinlock
+
+var lock = Spinlock[0]()
+lock.acquire()
+# ...critical section...
+lock.release()
+```
+
+### Dual-core (`pico.multicore`)
+
+`multicore.launch()` wakes core 1 out of the bootrom via the SIO-FIFO
+handshake and starts `mojo_core1_main` — export it exactly like the entry
+point. Core 1 gets its own 4 KB stack; coordinate through volatile RAM
+(`pico.mmio`).
+
+```mojo
+import pico.multicore as multicore
+
+
+@export("mojo_core1_main")
+def core1() abi("C"):
+    while True:
+        ...                       # runs on core 1
+
+var ok = multicore.launch()       # from core 0; False instead of hanging
+```
+
+After launch, `multicore.fifo_push(v, timeout_us)` and
+`multicore.fifo_pop(timeout_us)` exchange words over the 8-deep inter-core
+hardware FIFO (verified by a core-to-core echo test).
 
 ### RTT logging (`pico.rtt`)
 
@@ -256,7 +333,7 @@ probe is present.
 | host-unit | IR retarget rules against synthetic new-LLVM syntax, then `opt -verify`; volatile-op count preservation; boot2 CRC self-check |
 | compile-fail | `Pin[30]()` must be rejected at compile time |
 | build+static | Three firmware builds; ELF verification (boot2 CRC32, vector table, memory bounds); DWARF line tables present |
-| hw-mailbox | 17 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events, timer, PIO, NVIC interrupt dispatch, RTT |
+| hw-mailbox | 25 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events/interrupts, timer, PIO incl. side-set + forward labels, NVIC dispatch, RTT, PWM, ADC temperature, UART loopback, dual-core launch, contended spinlocks, inter-core FIFO |
 | hw-rtt | RTT control block and message read back over SWD, exactly as an RTT host tool would |
 | hw-timer-rate | Hardware timer measures ≈1 MHz against the host clock |
 | hw-dap-debug | Full F5 experience over the DAP protocol: breakpoint hits, stepping, scopes, memory reads |
@@ -307,7 +384,7 @@ target), then `pixi run chart`.
 ```
 src/main.mojo        application entry point (@export("mojo_main"))
 src/pico/            SDK: mmio / rp2040 / gpio / pins / pio / time / irq / rtt /
-                     board / chips
+                     pwm / adc / uart / multicore / sync / board / chips
 examples/            pio_blink.mojo, ...
 runtime/             crt0.S (vector table, startup, trap stubs), link.ld, boot2.bin
 tools/               Mojo: build.mojo (pipeline), retarget.mojo (IR pass),
@@ -322,9 +399,10 @@ docs/                BENCHMARKS.md, design notes
 
 ## Current limitations
 
-- No PWM, ADC, UART, I²C, SPI, DMA or USB drivers yet.
-- Single-core only.
-- PIO: side-set and forward-referencing labels are not implemented.
+- No I²C, SPI, DMA or USB drivers yet; UART is polled TX/RX only (no
+  interrupts, no RX ring buffer).
+- PIO programs assemble at run time (a few µs); compile-time assembly is
+  planned.
 - The toolchain tracks Mojo *nightly*; a compiler update can require a new
   retarget rule (mechanical, test-guarded, but a moving target).
 

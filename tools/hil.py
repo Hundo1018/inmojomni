@@ -39,6 +39,14 @@ TEST_NAMES = [
     "PIO state machine toggling a pin",
     "TIMER ALARM0 IRQ via NVIC (2 fires)",
     "RTT control block + message",
+    "GPIO EDGE_HIGH -> IO_IRQ_BANK0 (2 fires)",
+    "PWM 12 kHz 50% (counter + pad readback)",
+    "ADC temp sensor (plausible + stable)",
+    "UART0 internal loopback (LBE)",
+    "PIO side-set + forward label (edge count)",
+    "spinlock: 2x20k contended increments == 40000",
+    "inter-core FIFO ping-pong (5 rounds)",
+    "core 1 launched into Mojo (flag + heartbeat)",
 ]
 
 RTT_BASE = 0x2003_8000
@@ -79,11 +87,23 @@ def read_words(addr: int, count: int = 1) -> list[int]:
     return [int(w, 16) for w in res.stdout.split()]
 
 
+# 1 MHz SWD: the default speed proved marginal on this wiring during
+# sustained flash writes (reads were fine, downloads dropped blocks).
+SWD_KHZ = "1000"
+
+
 def flash(elf) -> None:
-    subprocess.run(
-        ["probe-rs", "download", "--chip", CHIP, str(elf)],
-        capture_output=True, text=True, check=True,
-    )
+    for attempt in (1, 2):
+        try:
+            subprocess.run(
+                ["probe-rs", "download", "--chip", CHIP,
+                 "--speed", SWD_KHZ, "--verify", str(elf)],
+                capture_output=True, text=True, check=True,
+            )
+            break
+        except subprocess.CalledProcessError:
+            if attempt == 2:
+                raise
     subprocess.run(
         ["probe-rs", "reset", "--chip", CHIP],
         capture_output=True, text=True, check=True,

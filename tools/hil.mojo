@@ -38,7 +38,14 @@ def probe_present() -> Bool:
 
 
 def flash(elf: String) raises:
-    _ = _sh(String("probe-rs download --chip ") + CHIP + " " + elf)
+    # 1 MHz SWD + one retry: the default speed proved marginal on this
+    # wiring during sustained flash writes.
+    var cmd = String("probe-rs download --chip ") + CHIP
+    cmd += " --speed 1000 --verify " + elf
+    try:
+        _ = _sh(cmd)
+    except:
+        _ = _sh(cmd)
     _ = _sh(String("probe-rs reset --chip ") + CHIP)
 
 

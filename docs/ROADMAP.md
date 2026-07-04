@@ -10,11 +10,20 @@
 - [x] **中斷**:NVIC + Mojo handler —— 2026-07-04 完成(`pico.irq` +
       crt0 弱符號向量,`@export("isr_irqN")` 連結期靜態綁定;比原計畫的
       RAM 向量表更簡單、零 RAM 成本。TIMER ALARM0 實機驗證兩次非同步觸發)
-- [ ] PWM、ADC(內建溫度感測器 demo 零外件)、UART/I²C/SPI 驅動
-- [ ] PIO v2:comptime 組譯(程式進 flash 常數)、side-set、前向標籤
-- [ ] 雙核心(SIO FIFO + spinlock)
+- [x] PWM、ADC(溫度感測器)、UART —— 2026-07-04 完成(`pico.pwm` comptime
+      slice/channel、`pico.adc` XOSC 時脈 + read_temp_milli_c、`pico.uart`
+      PL011 + LBE 零接線迴路測試;全部實機驗證)
+- [x] GPIO 中斷 —— 2026-07-04 完成(`Pin.irq_enable` 路由 IO_IRQ_BANK0)
+- [ ] I²C/SPI 驅動(需外部裝置驗證,等材料)
+- [x] PIO v2(部分):side-set(含 optional/pindirs)、前向標籤 ——
+      2026-07-04 完成,實機驗證(編碼檢查 + side-set 方波邊緣計數)
+- [ ] PIO comptime 組譯(程式進 flash 常數)
+- [x] 雙核心啟動 —— 2026-07-04 完成(`pico.multicore.launch()`,PSM 重置 +
+      bootrom FIFO 握手 + timeout,core1 跑 Mojo 實機驗證)
+- [x] 雙核心同步原語 —— 2026-07-04 完成(`pico.sync.Spinlock[N]` 硬體
+      spinlock,雙核 2×20k 競爭遞增精確 40000;`multicore.fifo_push/pop`
+      核間訊息,乒乓測試實機驗證)
 - [ ] 韌體瘦身:assert 路徑替換為輕量 trap,目標 blink < 600 B
-- [ ] GPIO 中斷(`IO_IRQ_BANK0` 路由 + per-pin handler API,基礎設施已就緒)
 
 ## 中期
 

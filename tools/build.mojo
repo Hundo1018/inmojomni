@@ -1,4 +1,4 @@
-"""pico-mojo build pipeline: Mojo source -> RP2040 firmware.
+"""Build pipeline: Mojo source -> RP2040 firmware.
 
 Mojo's bundled LLVM has no 32-bit ARM backend, so the pipeline is:
 
@@ -53,7 +53,7 @@ def sh(cmd: String) raises -> String:
 
 
 def shx(cmd: String) raises -> String:
-    """sh() with the command echoed first, python-pipeline style."""
+    """Like sh(), with the command echoed first (pipeline style)."""
     print("  $", cmd)
     return sh(cmd)
 

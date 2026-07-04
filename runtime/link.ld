@@ -9,6 +9,8 @@ MEMORY {
 ENTRY(reset_handler)
 
 _stack_top = ORIGIN(RAM) + LENGTH(RAM);
+/* core 1 gets its own 4 KB stack below core 0's region */
+_core1_stack_top = ORIGIN(RAM) + LENGTH(RAM) - 4K;
 
 SECTIONS {
     .boot2 : {
@@ -17,6 +19,9 @@ SECTIONS {
 
     .vector_table : {
         KEEP(*(.vector_table))
+        /* core1 launch metadata at the fixed address 0x100001C0:
+         * pico.multicore reads the trampoline/stack words from here */
+        KEEP(*(.core1_meta))
     } > FLASH
 
     .text : {

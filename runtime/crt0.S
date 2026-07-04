@@ -70,6 +70,36 @@ hang:
 default_handler:
     b default_handler
 
+/* --- core 1 support -------------------------------------------------
+ * pico.multicore reads {trampoline, stack} from .core1_meta (linked at
+ * 0x100001C0, right after the vector table) and feeds them through the
+ * bootrom's SIO-FIFO wake-up handshake. The trampoline calls the weak
+ * mojo_core1_main, which application code overrides via
+ *   @export("mojo_core1_main") def core1() abi("C")
+ */
+.section .core1_meta, "a"
+.global __core1_meta
+__core1_meta:
+    .word core1_trampoline
+    .word _core1_stack_top
+
+.text
+.thumb_func
+core1_trampoline:
+    bl mojo_core1_main
+5:  wfe
+    b 5b
+
+.weak mojo_core1_main
+.thumb_set mojo_core1_main, default_handler
+
+/* sev from Mojo (no inline asm there): wakes core 1 out of wfe */
+.thumb_func
+.global pico_sev
+pico_sev:
+    sev
+    bx lr
+
 /* --- stdlib assert/io externs -> debugger trap ----------------------
  * Mojo's runtime safety checks (e.g. InlineArray bounds) reference a
  * tiny printf path. There is no OS here: any of these firing means a
