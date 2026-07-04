@@ -437,7 +437,9 @@ docs/                BENCHMARKS.md, design notes
 - No I²C, SPI, DMA or USB drivers yet; UART is polled TX/RX only (no
   interrupts, no RX ring buffer).
 - The toolchain tracks Mojo *nightly*; a compiler update can require a new
-  retarget rule (mechanical, test-guarded, but a moving target).
+  retarget rule (mechanical, test-guarded, but a moving target). A scheduled
+  CI job re-tests against the newest nightly daily, so breakage surfaces
+  within a day of the nightly that caused it.
 
 ## License
 

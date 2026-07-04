@@ -20,7 +20,7 @@ conditions stated. Anything we did not measure is explicitly marked as such.
 - Compilers, all targeting Cortex-M0+ and linked by arm-none-eabi-gcc with
   the same crt0/link.ld/libgcc:
   - Mojo: `mojo build --emit=llvm` (riscv32) → IR retarget → system
-    `opt`/`llc -O2` (LLVM 18). Mojo 1.0.0b3 nightly (2026-07-03).
+    `opt`/`llc -O2` (LLVM 18). Mojo 1.0.0b3 nightly (2026-07-04).
   - C: `arm-none-eabi-gcc -O2` (GCC 13.2) — the conventional embedded baseline.
   - C: `clang -O2 --target=armv6m-none-eabi` (clang 18.1) — **the same LLVM
     backend the Mojo pipeline uses**; this column isolates language overhead.

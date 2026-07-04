@@ -24,13 +24,13 @@ name = "pico"
 path = "src/pico"
 
 [package.host-dependencies]
-mojo-compiler = ">=1.0.0b3.dev2026070306,<2"
+mojo-compiler = ">=1.0.0b3.dev2026070406,<2"
 
 [package.build-dependencies]
-mojo-compiler = ">=1.0.0b3.dev2026070306,<2"
+mojo-compiler = ">=1.0.0b3.dev2026070406,<2"
 
 [package.run-dependencies]
-mojo-compiler = ">=1.0.0b3.dev2026070306,<2"
+mojo-compiler = ">=1.0.0b3.dev2026070406,<2"
 
 # Product tooling (build pipeline, ELF verifier, benchmark driver) is
 # Mojo; Python remains only for test orchestration and the DAP client.
@@ -49,5 +49,5 @@ sizes = "mojo run -I tools tools/sizes.mojo"
 svd-update = "curl -sf https://raw.githubusercontent.com/raspberrypi/pico-sdk/2.1.0/src/rp2040/hardware_regs/RP2040.svd -o .vscode/rp2040.svd"
 
 [dependencies]
-modular = ">=26.4.0.dev2026051806,<27"
-mojo = ">=1.0.0b3.dev2026070306,<2"
+modular = ">=26.5.0.dev2026070406,<27"
+mojo = ">=1.0.0b3.dev2026070406,<2"
