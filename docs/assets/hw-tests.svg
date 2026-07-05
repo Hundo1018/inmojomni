@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="880" height="392" viewBox="0 0 880 392" font-family="ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace">
+  <rect x="0" y="0" width="880" height="392" rx="10" fill="#0d1117" stroke="#30363d"/>
+  <!-- title bar -->
+  <circle cx="22" cy="22" r="6" fill="#ff5f57"/>
+  <circle cx="42" cy="22" r="6" fill="#febc2e"/>
+  <circle cx="62" cy="22" r="6" fill="#28c840"/>
+  <text x="440" y="27" font-size="13" fill="#8b949e" text-anchor="middle">inmojomni — hardware-in-the-loop test suite (RP2040 over SWD)</text>
+  <text x="24" y="56" font-size="14" fill="#e6edf3">$ <tspan fill="#79c0ff">pixi run test</tspan></text>
+
+  <!-- left column -->
+  <g font-size="12.5" fill="#e6edf3">
+    <text x="24"  y="84">  <tspan fill="#3fb950">✓</tspan> u32 arithmetic &amp; wrap</text>
+    <text x="24"  y="103">  <tspan fill="#3fb950">✓</tspan> u32 division (libgcc __aeabi_uidiv)</text>
+    <text x="24"  y="122">  <tspan fill="#3fb950">✓</tspan> u64 ops on 32-bit core</text>
+    <text x="24"  y="141">  <tspan fill="#3fb950">✓</tspan> float32 soft-float (libgcc)</text>
+    <text x="24"  y="160">  <tspan fill="#3fb950">✓</tspan> SIMD[uint32, 4] on M0+</text>
+    <text x="24"  y="179">  <tspan fill="#3fb950">✓</tspan> comptime for unroll</text>
+    <text x="24"  y="198">  <tspan fill="#3fb950">✓</tspan> GPIO15 internal loopback</text>
+    <text x="24"  y="217">  <tspan fill="#3fb950">✓</tspan> GPIO25 (LED) internal loopback</text>
+    <text x="24"  y="236">  <tspan fill="#3fb950">✓</tspan> timer sleep_us bounds</text>
+    <text x="24"  y="255">  <tspan fill="#3fb950">✓</tspan> GPIO pull-up / pull-down</text>
+    <text x="24"  y="274">  <tspan fill="#3fb950">✓</tspan> GPIO output-disable override</text>
+    <text x="24"  y="293">  <tspan fill="#3fb950">✓</tspan> GPIO edge event latch &amp; ack</text>
+    <text x="24"  y="312">  <tspan fill="#3fb950">✓</tspan> GPIO funcsel round-trip</text>
+  </g>
+  <!-- right column -->
+  <g font-size="12.5" fill="#e6edf3">
+    <text x="452" y="84">  <tspan fill="#3fb950">✓</tspan> GPIO pad config (drive/schmitt)</text>
+    <text x="452" y="103">  <tspan fill="#3fb950">✓</tspan> PIO state machine toggling a pin</text>
+    <text x="452" y="122">  <tspan fill="#3fb950">✓</tspan> TIMER ALARM0 IRQ via NVIC (2 fires)</text>
+    <text x="452" y="141">  <tspan fill="#3fb950">✓</tspan> RTT control block + message</text>
+    <text x="452" y="160">  <tspan fill="#3fb950">✓</tspan> GPIO EDGE_HIGH → IO_IRQ_BANK0 (2 fires)</text>
+    <text x="452" y="179">  <tspan fill="#3fb950">✓</tspan> PWM 12 kHz 50% (counter + pad readback)</text>
+    <text x="452" y="198">  <tspan fill="#3fb950">✓</tspan> ADC temp sensor (plausible + stable)</text>
+    <text x="452" y="217">  <tspan fill="#3fb950">✓</tspan> UART0 internal loopback (LBE)</text>
+    <text x="452" y="236">  <tspan fill="#3fb950">✓</tspan> PIO side-set + forward label (edge count)</text>
+    <text x="452" y="255">  <tspan fill="#3fb950">✓</tspan> PIO comptime-assembled program</text>
+    <text x="452" y="274">  <tspan fill="#3fb950">✓</tspan> spinlock: 2×20k contended incs == 40000</text>
+    <text x="452" y="293">  <tspan fill="#3fb950">✓</tspan> inter-core FIFO ping-pong (5 rounds)</text>
+    <text x="452" y="312">  <tspan fill="#3fb950">✓</tspan> core 1 launched into Mojo (flag + heartbeat)</text>
+  </g>
+
+  <line x1="24" y1="330" x2="856" y2="330" stroke="#30363d"/>
+  <text x="24" y="356" font-size="13" fill="#e6edf3">host-unit · compile-fail · build+static · hw-mailbox · hw-rtt · hw-timer-rate · hw-dap-debug · hw-blink</text>
+  <text x="24" y="378" font-size="14" fill="#3fb950" font-weight="bold">8 stages, 26 on-target tests — all green ✓ <tspan fill="#8b949e" font-weight="normal">(board left running the blink demo)</tspan></text>
+</svg>
