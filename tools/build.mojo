@@ -160,12 +160,68 @@ def build(main_mojo: String, name: String, debug: Bool) raises -> String:
     return elf
 
 
+def build_rv32(main_mojo: String, name: String, debug: Bool) raises -> String:
+    """RP2350 (Pico 2) native path.
+
+    The Hazard3 cores are RISC-V, so Mojo emits riscv32 objects *directly*
+    (its bundled LLVM has the RISC-V backend) — no `retarget.mojo`, no
+    external `llc`, no IR rewriting. Contrast build() above, where the same
+    riscv32 IR is textually retargeted to thumbv6m because Mojo has no ARM
+    backend. See runtime/crt0_rv32.S, runtime/rp2350_image_def.S,
+    runtime/link_rv32.ld.
+    """
+    if not Path("runtime/link_rv32.ld").exists():
+        raise Error("run from the repo root (runtime/link_rv32.ld not found)")
+    _ = sh("mkdir -p build")
+    var prefix = toolchain_prefix()
+    var obj = String("build/") + name + ".o"
+    var crt0 = String("build/crt0_rv32.o")
+    var imgdef = String("build/rp2350_image_def.o")
+    var elf = String("build/") + name + ".elf"
+
+    print("[1/3] Mojo -> riscv32 object (native, no retarget)")
+    var mojo = String(prefix) + "/bin/mojo build --emit=object"
+    if debug:
+        mojo += " -g --no-optimization"
+    mojo += (
+        " --target-triple=riscv32-unknown-none-elf -I "
+        + prefix
+        + "/lib/mojo -I src -o "
+        + obj
+        + " "
+        + main_mojo
+    )
+    _ = shx(mojo)
+
+    print("[2/3] assemble RISC-V startup + RP2350 boot block")
+    var cc = String("clang --target=riscv32-unknown-none-elf -march=rv32i -c ")
+    _ = shx(cc + "runtime/crt0_rv32.S -o " + crt0)
+    _ = shx(cc + "runtime/rp2350_image_def.S -o " + imgdef)
+
+    print("[3/3] link (ld.lld -> riscv32 ELF)")
+    _ = shx(
+        String("ld.lld -m elf32lriscv -T runtime/link_rv32.ld ")
+        + imgdef
+        + " "
+        + crt0
+        + " "
+        + obj
+        + " --Map=build/"
+        + name
+        + ".map -o "
+        + elf
+    )
+    _ = shx(String("llvm-size ") + elf)
+    return elf
+
+
 def main() raises:
     var flash = False
     var uf2 = False
     var debug = False
     var name = String()
-    var main_mojo = String("src/main.mojo")
+    var chip = String("rp2040")
+    var main_mojo = String()
     var args = argv()
     var i = 1
     while i < len(args):
@@ -179,15 +235,28 @@ def main() raises:
         elif a == "--name":
             i += 1
             name = String(args[i])
+        elif a == "--chip":
+            i += 1
+            chip = String(args[i])
         elif a.startswith("--"):
             raise Error("unknown option: " + a)
         else:
             main_mojo = a
         i += 1
+    if main_mojo.byte_length() == 0:
+        main_mojo = String(
+            "src/main_rp2350.mojo"
+        ) if chip == "rp2350" else String("src/main.mojo")
     if name.byte_length() == 0:
         name = String("firmware-debug") if debug else String("firmware")
 
-    var elf = build(main_mojo, name, debug)
+    var elf: String
+    if chip == "rp2350":
+        elf = build_rv32(main_mojo, name, debug)
+    elif chip == "rp2040":
+        elf = build(main_mojo, name, debug)
+    else:
+        raise Error("unknown --chip: " + chip + " (want rp2040 or rp2350)")
 
     if uf2:
         var uf2_path = String("build/") + name + ".uf2"
@@ -195,7 +264,24 @@ def main() raises:
         print("UF2 ready:", uf2_path)
 
     if flash:
-        print("[flash] probe-rs -> RP2040")
-        _ = shx(String("probe-rs download --chip RP2040 ") + elf)
-        _ = shx(String("probe-rs reset --chip RP2040"))
+        # RP2350: probe-rs has NO `RP235x_riscv` target (checked 0.30/0.31);
+        # use `RP235x` (the Arm/M33 view programs flash — content is
+        # architecture-neutral). The M33 debug AP only responds while the
+        # M33 is alive, i.e. in BOOTSEL — verified on hardware that a plain
+        # attach faults once a RISC-V image is running. So RP2350 flashing
+        # REQUIRES the board in BOOTSEL (hold BOOTSEL + replug). --verify is
+        # mandatory: a UF2 drag-drop from a no-USB picotool silently failed
+        # to produce a booting image. After reset the bootrom sees the
+        # IMAGE_DEF and arch-switches to Hazard3.
+        var target = String("RP235x") if chip == "rp2350" else String("RP2040")
+        if chip == "rp2350":
+            print(
+                "[flash] RP2350 needs the board in BOOTSEL"
+                " (hold BOOTSEL + replug), then:"
+            )
+        print("[flash] probe-rs ->", target)
+        _ = shx(
+            String("probe-rs download --chip ") + target + " --verify " + elf
+        )
+        _ = shx(String("probe-rs reset --chip ") + target)
         print("flashed + reset OK")
