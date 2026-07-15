@@ -1,7 +1,8 @@
-# EXPECT-ERROR: GPIO0..GPIO29
+# EXPECT-ERROR: GPIO number out of range
 #
 # Pin numbers are compile-time parameters; an out-of-range pin must be
-# rejected by `comptime assert`, not discovered on the board.
+# rejected by `comptime assert`, not discovered on the board. Pin[30] is
+# invalid on the default chip (RP2040, GPIO0..GPIO29).
 
 from pico.gpio import Pin
 

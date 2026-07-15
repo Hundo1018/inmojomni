@@ -9,14 +9,10 @@ RP2040 atomic SET/CLR register aliases, so they are race-free without
 read-modify-write.
 """
 
+from pico.chips import Chip, RP2040
 from pico.mmio import read32, write32, write32_clr, write32_set
 from pico.rp2040 import (
     FUNCSEL_SIO,
-    IO_BANK0_BASE,
-    IO_BANK0_INTR0,
-    IO_BANK0_PROC0_INTE0,
-    IO_BANK0_PROC0_INTS0,
-    PADS_BANK0_BASE,
     PADS_DRIVE_LSB,
     PADS_DRIVE_MASK,
     PADS_IE,
@@ -25,14 +21,6 @@ from pico.rp2040 import (
     PADS_PUE,
     PADS_SCHMITT,
     PADS_SLEWFAST,
-    SIO_GPIO_IN,
-    SIO_GPIO_OE,
-    SIO_GPIO_OE_CLR,
-    SIO_GPIO_OE_SET,
-    SIO_GPIO_OUT,
-    SIO_GPIO_OUT_CLR,
-    SIO_GPIO_OUT_SET,
-    SIO_GPIO_OUT_XOR,
 )
 
 
@@ -72,12 +60,17 @@ struct Event:
     comptime ALL: UInt32 = 0xF
 
 
-struct Pin[N: Int](TrivialRegisterPassable):
-    """GPIO pin `N`, checked at compile time (RP2040 has GPIO0..GPIO29)."""
+struct Pin[N: Int, C: Chip = RP2040](TrivialRegisterPassable):
+    """GPIO pin `N` on chip `C`, checked at compile time.
+
+    `C` defaults to RP2040, so `Pin[25]()` is unchanged; a board module
+    binds it (e.g. `pico.pico2` aliases `Pin = Pin[_, RP2350]`). All the
+    register bases come from `C`, so the same driver drives either chip.
+    """
 
     def __init__(out self):
-        comptime assert 0 <= Self.N and Self.N < 30, (
-            "RP2040 only has GPIO0..GPIO29"
+        comptime assert 0 <= Self.N and Self.N < Self.C.NUM_GPIOS, (
+            "GPIO number out of range for this chip"
         )
         self.set_function(FUNCSEL_SIO)
 
@@ -89,15 +82,16 @@ struct Pin[N: Int](TrivialRegisterPassable):
 
     @always_inline
     def _ctrl(self) -> UInt32:
-        return IO_BANK0_BASE + UInt32(8 * Self.N + 4)
+        return Self.C.IO_BANK0_BASE + UInt32(8 * Self.N + 4)
 
     @always_inline
     def _pad(self) -> UInt32:
-        return PADS_BANK0_BASE + UInt32(4 + 4 * Self.N)
+        return Self.C.PADS_BANK0_BASE + UInt32(4 + 4 * Self.N)
 
     @always_inline
     def _intr(self) -> UInt32:
-        return IO_BANK0_INTR0 + UInt32(4 * (Self.N // 8))
+        # +0xF0 (INTR0) is RP2040-verified; RP2350 IRQ layout is out of scope.
+        return Self.C.IO_BANK0_BASE + UInt32(0xF0) + UInt32(4 * (Self.N // 8))
 
     @always_inline
     def _event_shift(self) -> UInt32:
@@ -114,25 +108,30 @@ struct Pin[N: Int](TrivialRegisterPassable):
     # --- direction ----------------------------------------------------
 
     def make_output(self):
-        write32(SIO_GPIO_OE_SET, self._mask())
+        write32(Self.C.SIO_GPIO_OE_SET, self._mask())
+        comptime if Self.C.HAS_PAD_ISO:
+            # RP2350 only: every pad powers up ISOlated (PADS bit 8) and
+            # de-resetting PADS does NOT clear it (datasheet §9.7). Clear it
+            # LAST, so the pad connects only once the output is configured.
+            write32_clr(self._pad(), UInt32(1) << 8)
 
     def make_input(self):
-        write32(SIO_GPIO_OE_CLR, self._mask())
+        write32(Self.C.SIO_GPIO_OE_CLR, self._mask())
         self.input_enable(True)
 
     def is_output(self) -> Bool:
-        return (read32(SIO_GPIO_OE) & self._mask()) != 0
+        return (read32(Self.C.SIO_GPIO_OE) & self._mask()) != 0
 
     # --- output level ---------------------------------------------------
 
     def high(self):
-        write32(SIO_GPIO_OUT_SET, self._mask())
+        write32(Self.C.SIO_GPIO_OUT_SET, self._mask())
 
     def low(self):
-        write32(SIO_GPIO_OUT_CLR, self._mask())
+        write32(Self.C.SIO_GPIO_OUT_CLR, self._mask())
 
     def toggle(self):
-        write32(SIO_GPIO_OUT_XOR, self._mask())
+        write32(Self.C.SIO_GPIO_OUT_XOR, self._mask())
 
     def write(self, level: Bool):
         if level:
@@ -142,14 +141,14 @@ struct Pin[N: Int](TrivialRegisterPassable):
 
     def read_output(self) -> Bool:
         """What we are driving (SIO.GPIO_OUT), not what the pad sees."""
-        return (read32(SIO_GPIO_OUT) & self._mask()) != 0
+        return (read32(Self.C.SIO_GPIO_OUT) & self._mask()) != 0
 
     # --- input ----------------------------------------------------------
 
     def read(self) -> Bool:
         """Read the actual pad state (input enable is on by default, so
         this also reads back what an output pin is driving)."""
-        return (read32(SIO_GPIO_IN) & self._mask()) != 0
+        return (read32(Self.C.SIO_GPIO_IN) & self._mask()) != 0
 
     # --- pad electrical control (atomic set/clr, race-free) -------------
 
@@ -214,10 +213,11 @@ struct Pin[N: Int](TrivialRegisterPassable):
         write32(self._intr(), (mask & Event.ALL) << self._event_shift())
 
     def _inte(self) -> UInt32:
-        return IO_BANK0_PROC0_INTE0 + UInt32(4 * (Self.N // 8))
+        # +0x100/+0x120 (PROC0_INTE0/INTS0) are RP2040-verified offsets.
+        return Self.C.IO_BANK0_BASE + UInt32(0x100) + UInt32(4 * (Self.N // 8))
 
     def _ints(self) -> UInt32:
-        return IO_BANK0_PROC0_INTS0 + UInt32(4 * (Self.N // 8))
+        return Self.C.IO_BANK0_BASE + UInt32(0x120) + UInt32(4 * (Self.N // 8))
 
     def irq_enable(self, mask: UInt32):
         """Route Event bits to IO_IRQ_BANK0 (processor 0). Also enable

@@ -59,6 +59,14 @@ def start() abi("C"):
 - **The toolchain is Mojo, too.** The build pipeline, IR retargeting pass, ELF
   verifier and benchmark driver are Mojo programs; Python remains only as the
   test orchestrator and DAP protocol client.
+- **Two chips, one SDK — including native RISC-V.** The same `pico` SDK targets
+  the RP2040 (Arm Cortex-M0+) and the RP2350 / Pico 2 (Hazard3 RISC-V). On the
+  RP2350 there is *no* retargeting — Mojo compiles straight for the RISC-V cores.
+  The chip is a compile-time parameter, so the Pico 2 blink is line-for-line the
+  RP2040 blink with one different import, and the abstraction is zero-cost: the
+  chip-generic SDK emits byte-identical machine code to the hand-written version
+  (verified by `.text` diff). Confirmed booting and blinking on real Pico 2
+  silicon.
 
 ## How it works
 
@@ -82,6 +90,34 @@ The rewrite is guarded by unit tests, `opt -verify`, and a check that the number
 of volatile operations is preserved end to end. When a Mojo nightly introduces
 new syntax, supporting it is one rule in [tools/retarget.mojo](tools/retarget.mojo).
 The pipeline driver itself is a Mojo program ([tools/build.mojo](tools/build.mojo)).
+
+### The RP2350 (Pico 2) needs none of this
+
+The Hazard3 cores on the RP2350 are RISC-V, so Mojo's `riscv32` backend targets
+them **directly** — `mojo build --emit=object`, no IR retargeting, no external
+`llc`. This is the same riscv32 output the RP2040 path *starts* from, minus the
+whole retarget-to-Arm step. The chip-specific parts — the boot block the RP2350
+ROM checks to arch-switch into RISC-V, the moved peripheral map, the pad-ISO
+step, the interleaved SIO offsets — all live in the SDK's chip descriptor
+([src/pico/chips.mojo](src/pico/chips.mojo)), selected by the chip parameter, so
+none of it reaches user code:
+
+```mojo
+from pico.pico2 import Pin, pins, init, sleep_ms   # only this line differs
+
+@export("mojo_main")
+def start() abi("C"):
+    init()
+    var led = Pin[pins.LED]()
+    led.make_output()
+    while True:
+        led.toggle()
+        sleep_ms(250)
+```
+
+Build it with `pixi run mojo run -I tools tools/build.mojo --chip rp2350`. The
+result is a native RISC-V image (`picotool` reports image type RISC-V), verified
+booting and blinking on a Pico 2.
 
 ## Getting started
 
@@ -419,11 +455,14 @@ target), then `pixi run chart`.
 ## Project layout
 
 ```
-src/main.mojo        application entry point (@export("mojo_main"))
+src/main.mojo        RP2040 entry point (@export("mojo_main"))
+src/main_rp2350.mojo Pico 2 / RP2350 native-RISC-V entry point (same shape)
 src/pico/            SDK: mmio / rp2040 / gpio / pins / pio / time / irq / rtt /
-                     pwm / adc / uart / multicore / sync / board / chips
+                     pwm / adc / uart / multicore / sync / board
+                     chips (per-chip register map) / pico2 (Pico 2 board module)
 examples/            pio_blink.mojo, ...
-runtime/             crt0.S (vector table, startup, trap stubs), link.ld, boot2.bin
+runtime/             crt0.S / link.ld / boot2.bin (RP2040),
+                     crt0_rv32.S / link_rv32.ld / rp2350_image_def.S (RP2350)
 tools/               Mojo: build.mojo (pipeline), retarget.mojo (IR pass),
                      check_elf.mojo, bench.mojo, chart.mojo, hil.mojo
                      Python (test rig only): run_tests.py, hil.py, dap_client.py
@@ -438,10 +477,18 @@ docs/                BENCHMARKS.md, design notes
 
 - No I²C, SPI, DMA or USB drivers yet; UART is polled TX/RX only (no
   interrupts, no RX ring buffer).
+- **RP2350 / Pico 2 support is native build + GPIO blink, hardware-verified.**
+  The rest of the SDK (PIO, PWM, ADC, UART, interrupts, dual-core) is
+  chip-generic in source and compiles for the RP2350, but is exercised on
+  real hardware only on the RP2040 so far — the 26-test on-target suite is
+  RP2040. Flashing the RP2350 requires the board in BOOTSEL (probe-rs 0.31
+  cannot attach to the running Hazard3 core over SWD), then
+  `probe-rs download --chip RP235x --verify` or a UF2.
 - The toolchain tracks Mojo *nightly*; a compiler update can require a new
   retarget rule (mechanical, test-guarded, but a moving target). A scheduled
   CI job re-tests against the newest nightly daily, so breakage surfaces
-  within a day of the nightly that caused it.
+  within a day of the nightly that caused it. (The riscv32 backend both paths
+  rest on is an unofficial Mojo tier — see [docs/ROADMAP.md](docs/ROADMAP.md).)
 
 ## License
 
