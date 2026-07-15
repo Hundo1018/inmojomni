@@ -1,4 +1,4 @@
-"""Blink for the Raspberry Pi Pico 2 (RP2350), native RISC-V — Mojo 直出.
+"""Blink for the Raspberry Pi Pico 2 (RP2350), native RISC-V — Mojo.
 
 Same source shape as src/main.mojo (the RP2040 blink); only the import
 line differs (`pico.pico2` instead of `pico`). The chip-specific register
