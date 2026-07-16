@@ -43,6 +43,7 @@ uf2 = "mojo run -I tools tools/build.mojo --uf2"
 test = "python tools/run_tests.py"
 test-host = "python tools/run_tests.py --no-hw"
 bench = "mojo run -I tools tools/bench.mojo"
+bench-rp2350 = "mojo run -I tools tools/bench_rp2350.mojo"
 chart = "mojo run -I tools tools/chart.mojo"
 sizes = "mojo run -I tools tools/sizes.mojo"
 # .vscode/rp2040.svd provenance: pico-sdk (BSD-3-Clause); refresh with:
@@ -51,3 +52,4 @@ svd-update = "curl -sf https://raw.githubusercontent.com/raspberrypi/pico-sdk/2.
 [dependencies]
 modular = ">=26.5.0.dev2026070406,<27"
 mojo = ">=1.0.0b3.dev2026070406,<2"
+pyusb = ">=1.3.1,<2"

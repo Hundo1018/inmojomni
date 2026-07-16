@@ -72,10 +72,14 @@ def read_mem(ep_out, ep_in, addr, size):
 def main():
     addr = int(sys.argv[1], 16)
     nwords = int(sys.argv[2])
+    dec = "--dec" in sys.argv[3:]
     dev, ep_out, ep_in = open_picoboot()
     data = read_mem(ep_out, ep_in, addr, nwords * 4)
     words = struct.unpack(f"<{nwords}I", data)
-    print(" ".join(f"{w:08x}" for w in words))
+    if dec:
+        print(" ".join(str(w) for w in words))
+    else:
+        print(" ".join(f"{w:08x}" for w in words))
     usb.util.dispose_resources(dev)
 
 

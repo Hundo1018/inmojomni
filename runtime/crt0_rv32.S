@@ -27,6 +27,10 @@ _reset:
     la t0, _trap
     csrw mtvec, t0
 
+    /* mcountinhibit (0x320) = 0: make sure mcycle counts. Numeric CSR
+     * name so the assembler accepts it at any -march. */
+    csrw 0x320, x0
+
     /* copy .data (initialised globals) from flash (LMA) to RAM (VMA) */
     la a0, _sidata
     la a1, _sdata
