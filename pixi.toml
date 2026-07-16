@@ -44,6 +44,7 @@ test = "python tools/run_tests.py"
 test-host = "python tools/run_tests.py --no-hw"
 bench = "mojo run -I tools tools/bench.mojo"
 bench-rp2350 = "mojo run -I tools tools/bench_rp2350.mojo"
+features-rp2350 = "mojo run -I tools tools/features_rp2350.mojo"
 chart = "mojo run -I tools tools/chart.mojo"
 sizes = "mojo run -I tools tools/sizes.mojo"
 # .vscode/rp2040.svd provenance: pico-sdk (BSD-3-Clause); refresh with:
