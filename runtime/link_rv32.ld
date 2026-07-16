@@ -39,6 +39,11 @@ SECTIONS {
 
     .data : ALIGN(4) {
         _sdata = .;
+        /* RAM-resident code (e.g. flash_commit_reboot): must execute
+         * while XIP is disabled, so it lives in RAM, loaded from flash
+         * by the crt0 .data copy loop like any initialised data. */
+        *(.ramfunc*)
+        . = ALIGN(4);
         *(.data*)
         . = ALIGN(4);
         __global_pointer$ = . + 0x800;
