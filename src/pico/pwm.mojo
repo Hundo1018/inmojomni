@@ -10,29 +10,19 @@ for a pin is all it takes, and an out-of-range pin is a compile error.
     pwm.enable()
 """
 
+from pico.chips import Chip, RP2040
 from pico.gpio import Function, Pin
 from pico.mmio import read32, write32, write32_clr, write32_set
-from pico.rp2040 import (
-    PWM_BASE,
-    RESET_PWM,
-    RESETS_RESET,
-    RESETS_RESET_DONE,
-)
 
 
-def _unreset():
-    write32_clr(RESETS_RESET, RESET_PWM)
-    while (read32(RESETS_RESET_DONE) & RESET_PWM) == 0:
-        pass
-
-
-struct Pwm[PIN: Int](TrivialRegisterPassable):
+struct Pwm[PIN: Int, C: Chip = RP2040](TrivialRegisterPassable):
     """One PWM output, bound to a GPIO at compile time.
-    slice = (PIN >> 1) & 7; channel B when PIN is odd."""
+    slice = (PIN >> 1) % NUM_PWM_SLICES; channel B when PIN is odd.
+    Chip-generic: base address, slice count and RESETS bit from `C`."""
 
-    comptime SLICE: Int = (Self.PIN >> 1) & 7
+    comptime SLICE: Int = (Self.PIN >> 1) % Self.C.NUM_PWM_SLICES
     comptime IS_B: Bool = (Self.PIN & 1) == 1
-    comptime CSR: UInt32 = PWM_BASE + UInt32(0x14 * Self.SLICE)
+    comptime CSR: UInt32 = Self.C.PWM_BASE + UInt32(0x14 * Self.SLICE)
     comptime DIV: UInt32 = Self.CSR + 0x04
     comptime CTR: UInt32 = Self.CSR + 0x08
     comptime CC: UInt32 = Self.CSR + 0x0C
@@ -40,10 +30,15 @@ struct Pwm[PIN: Int](TrivialRegisterPassable):
 
     def __init__(out self):
         comptime assert (
-            Self.PIN >= 0 and Self.PIN < 30
-        ), "RP2040 has GPIO0..GPIO29"
-        _unreset()
-        var pin = Pin[Self.PIN]()
+            Self.PIN >= 0 and Self.PIN < Self.C.NUM_GPIOS
+        ), "GPIO number out of range for this chip"
+        comptime assert Self.C.NUM_PWM_SLICES == 8 or Self.PIN < 24, (
+            "PWM slice mapping above GPIO23 is unverified on this chip"
+        )
+        write32_clr(Self.C.RESETS_RESET, Self.C.RESET_PWM)
+        while (read32(Self.C.RESETS_RESET_DONE) & Self.C.RESET_PWM) == 0:
+            pass
+        var pin = Pin[Self.PIN, Self.C]()
         pin.set_function(Function.PWM)
 
     def set_top(self, top: UInt32):

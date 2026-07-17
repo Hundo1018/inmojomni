@@ -79,7 +79,8 @@ def start() abi("C"):
 | GPIO in/out, pulls, events | ✅ | ✅ (in/out) | electrical read-back via `GPIO_IN` |
 | PIO state machines (comptime assembler) | ✅ | ✅ incl. **PIO2** | square wave observed on the pad |
 | Dual-core launch + inter-core FIFO | ✅ | ✅ | host-recomputed checksum, both paths |
-| Timer, PWM, ADC, UART, RTT, NVIC interrupts | ✅ | — not yet | 26-test HIL suite (SWD) |
+| 1 µs hardware timer, PWM, ADC, UART | ✅ | ✅ | HIL suite / ratio+loopback gates |
+| RTT, interrupts | ✅ NVIC | — in progress (Xh3irq) | 26-test HIL suite (SWD) |
 | VS Code F5 debugging (source-level) | ✅ | ✅ (openocd fork + gdb) | automated DAP / gdb gates |
 | Four-language benchmark | ✅ | ✅ | checksum equality across languages |
 | Probe flash + verify (no button) | ✅ probe-rs | ✅ openocd fork | verified write-back |

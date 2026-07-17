@@ -21,7 +21,13 @@ from pico.multicore import (
     launch as _launch,
 )
 from pico.pio import StateMachine as _StateMachine
-from pico.time import sleep_ms as _sleep_ms
+from pico.pwm import Pwm as _Pwm
+from pico.time import (
+    init as _time_init,
+    sleep_ms as _sleep_ms,
+    sleep_us as _sleep_us,
+    time_us as _time_us,
+)
 from pico.chips import RP2350
 import pico.pins as pins
 
@@ -29,6 +35,21 @@ import pico.pins as pins
 # and `StateMachine[P, SM]` targets the RP2350 (which adds PIO2).
 comptime Pin = _Pin[_, RP2350]
 comptime StateMachine = _StateMachine[_, _, RP2350]
+comptime Pwm = _Pwm[_, RP2350]
+
+
+def init_timer():
+    """Start the 1 µs hardware timebase (XOSC + TICKS + TIMER0);
+    prerequisite for time_us/sleep_us, ADC and UART on this board."""
+    _time_init[RP2350]()
+
+
+def time_us() -> UInt32:
+    return _time_us[RP2350]()
+
+
+def sleep_us(us: UInt32):
+    _sleep_us[RP2350](us)
 
 
 def launch_core1() -> Bool:

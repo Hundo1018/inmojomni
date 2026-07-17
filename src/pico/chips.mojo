@@ -65,6 +65,26 @@ trait Chip:
     comptime PIO0_BASE: UInt32  # PIOn = PIO0_BASE + n * 0x10_0000
     comptime RESET_PIO0_SHIFT: Int  # RESETS bit index of PIO0 (PIOn = +n)
 
+    # --- clocks / timebase ----------------------------------------------
+    comptime XOSC_BASE: UInt32
+    comptime CLOCKS_BASE: UInt32
+    comptime CLK_ADC_CTRL_OFF: UInt32  # CLOCKS offset (moved on RP2350)
+    comptime HAS_TICKS_BLOCK: Bool  # RP2350: TICKS block feeds TIMER0
+    comptime TICKS_BASE: UInt32  # 0 where absent
+    comptime TIMER_BASE: UInt32
+    comptime TIMER_INTR_OFF: UInt32  # RP2350 inserted regs before INTR/INTE
+    comptime TIMER_INTE_OFF: UInt32
+    comptime RESET_TIMER: UInt32
+
+    # --- PWM / ADC / UART -------------------------------------------------
+    comptime PWM_BASE: UInt32
+    comptime NUM_PWM_SLICES: Int
+    comptime RESET_PWM: UInt32
+    comptime ADC_BASE: UInt32
+    comptime RESET_ADC: UInt32
+    comptime UART0_BASE: UInt32
+    comptime RESET_UART0: UInt32
+
 
 struct RP2040(Chip):
     comptime NAME: StaticString = "RP2040"
@@ -103,6 +123,24 @@ struct RP2040(Chip):
 
     comptime PIO0_BASE: UInt32 = 0x5020_0000
     comptime RESET_PIO0_SHIFT: Int = 10
+
+    comptime XOSC_BASE: UInt32 = 0x4002_4000
+    comptime CLOCKS_BASE: UInt32 = 0x4000_8000
+    comptime CLK_ADC_CTRL_OFF: UInt32 = 0x60
+    comptime HAS_TICKS_BLOCK: Bool = False
+    comptime TICKS_BASE: UInt32 = 0
+    comptime TIMER_BASE: UInt32 = 0x4005_4000
+    comptime TIMER_INTR_OFF: UInt32 = 0x34
+    comptime TIMER_INTE_OFF: UInt32 = 0x38
+    comptime RESET_TIMER: UInt32 = 1 << 21
+
+    comptime PWM_BASE: UInt32 = 0x4005_0000
+    comptime NUM_PWM_SLICES: Int = 8
+    comptime RESET_PWM: UInt32 = 1 << 14
+    comptime ADC_BASE: UInt32 = 0x4004_C000
+    comptime RESET_ADC: UInt32 = 1 << 0
+    comptime UART0_BASE: UInt32 = 0x4003_4000
+    comptime RESET_UART0: UInt32 = 1 << 22
 
 
 struct RP2350(Chip):
@@ -151,6 +189,24 @@ struct RP2350(Chip):
 
     comptime PIO0_BASE: UInt32 = 0x5020_0000
     comptime RESET_PIO0_SHIFT: Int = 11
+
+    comptime XOSC_BASE: UInt32 = 0x4004_8000
+    comptime CLOCKS_BASE: UInt32 = 0x4001_0000
+    comptime CLK_ADC_CTRL_OFF: UInt32 = 0x6C
+    comptime HAS_TICKS_BLOCK: Bool = True  # ticks.h: TIMER0 tick source
+    comptime TICKS_BASE: UInt32 = 0x4010_8000
+    comptime TIMER_BASE: UInt32 = 0x400B_0000  # TIMER0
+    comptime TIMER_INTR_OFF: UInt32 = 0x3C  # LOCKED/SOURCE inserted
+    comptime TIMER_INTE_OFF: UInt32 = 0x40
+    comptime RESET_TIMER: UInt32 = 1 << 23  # TIMER0
+
+    comptime PWM_BASE: UInt32 = 0x400A_8000
+    comptime NUM_PWM_SLICES: Int = 12
+    comptime RESET_PWM: UInt32 = 1 << 16
+    comptime ADC_BASE: UInt32 = 0x400A_0000
+    comptime RESET_ADC: UInt32 = 1 << 0
+    comptime UART0_BASE: UInt32 = 0x4007_0000
+    comptime RESET_UART0: UInt32 = 1 << 26
 
 
 struct PicoBoard:
