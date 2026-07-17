@@ -9,6 +9,13 @@
             "group": "build"
         },
         {
+            "label": "inmojomni: build+flash rp2350 (debug)",
+            "type": "shell",
+            "command": "pixi run flash-debug-rp2350",
+            "problemMatcher": [],
+            "group": "build"
+        },
+        {
             "label": "inmojomni: build-debug",
             "type": "shell",
             "command": "pixi run build-debug",

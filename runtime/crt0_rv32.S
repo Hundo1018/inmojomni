@@ -27,9 +27,10 @@ _reset:
     la t0, _trap
     csrw mtvec, t0
 
-    /* mcountinhibit (0x320) = 0: make sure mcycle counts. Numeric CSR
-     * name so the assembler accepts it at any -march. */
-    csrw 0x320, x0
+    /* Enable the cycle/instret counters: Hazard3 resets mcountinhibit
+     * (0x320) to 0x5 — cy and ir INHIBITED (hazard3 doc/sections/
+     * csr.adoc). Numeric CSR so the assembler accepts any -march. */
+    csrw 0x320, zero
 
     /* copy .data (initialised globals) from flash (LMA) to RAM (VMA) */
     la a0, _sidata
@@ -144,6 +145,7 @@ core1_trampoline:
     .option norelax
     la gp, __global_pointer$
     .option pop
+    csrw 0x320, zero         /* enable this hart's cycle counter too */
     call mojo_core1_main
 1:  slt  x0, x0, x0          /* h3.block: park if it ever returns */
     j 1b

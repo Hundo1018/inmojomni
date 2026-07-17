@@ -45,9 +45,11 @@ def start() abi("C"):
 - **Compile-time hardware safety.** GPIO pins, PIO blocks and state machines are
   type parameters. An out-of-range pin (`Pin[30]()` on the RP2040) fails to
   *compile* — a test guarantees this stays true.
-- **Real debugging.** VS Code F5 gives breakpoints, stepping, registers, memory and
-  SVD peripheral views in `.mojo` sources, via `probe-rs`. The full debug path is
-  exercised by an automated DAP-protocol test.
+- **Real debugging, both chips.** VS Code F5 gives breakpoints, stepping,
+  registers, memory and SVD peripheral views in `.mojo` sources — probe-rs on
+  the RP2040, the raspberrypi/openocd fork + gdb on the Pico 2's RISC-V
+  cores. Both paths are exercised by automated gates (DAP protocol on the
+  RP2040; flash/hbreak/step/source-line assertions on the RP2350).
 - **Tiny binaries, same size as C.** The complete blink is 780 B — byte-for-
   byte the size of the same-backend C blink on the identical rig (Rust: 784 B,
   gcc: 712 B; `pixi run sizes` reproduces the comparison). Registers defined
@@ -78,8 +80,9 @@ def start() abi("C"):
 | PIO state machines (comptime assembler) | ✅ | ✅ incl. **PIO2** | square wave observed on the pad |
 | Dual-core launch + inter-core FIFO | ✅ | ✅ | host-recomputed checksum, both paths |
 | Timer, PWM, ADC, UART, RTT, NVIC interrupts | ✅ | — not yet | 26-test HIL suite (SWD) |
-| VS Code F5 debugging | ✅ | — (probe limits) | automated DAP-protocol test |
+| VS Code F5 debugging (source-level) | ✅ | ✅ (openocd fork + gdb) | automated DAP / gdb gates |
 | Four-language benchmark | ✅ | ✅ | checksum equality across languages |
+| Probe flash + verify (no button) | ✅ probe-rs | ✅ openocd fork | verified write-back |
 | Automated on-hardware testing | SWD mailbox | **probe-free flash mailbox** | every claim above |
 
 ## How it works
@@ -126,7 +129,7 @@ def start() abi("C"):
 flowchart LR
     A["main_rp2350.mojo + pico SDK"] -->|"mojo build --emit=object<br>riscv32, +m +a +c"| B["rv32imac object"]
     B -->|"ld.lld: crt0_rv32.S +<br>IMAGE_DEF block + link_rv32.ld"| C["firmware.elf / .uf2"]
-    C -->|"UF2 copy (BOOTSEL)<br>or probe-rs"| D["RP2350"]
+    C -->|"openocd flash+verify (SWD)<br>or UF2 copy (BOOTSEL)"| D["RP2350"]
 ```
 
 Build it with `pixi run mojo run -I tools tools/build.mojo --chip rp2350`. The
@@ -221,6 +224,8 @@ pixi run flash      # build + flash over SWD; the LED starts blinking
 | `pixi run bench-rp2350` | Same four-language benchmark on a Pico 2 in BOOTSEL (no probe needed) |
 | `pixi run features-rp2350` | Mojo language-feature measurements on Pico 2 silicon |
 | `pixi run piomc-rp2350` | Pico 2 PIO (incl. PIO2) + dual-core hardware proof |
+| `pixi run flash-rp2350` / `flash-debug-rp2350` | Build + flash Pico 2 over SWD (no BOOTSEL button) |
+| `pixi run debug-test-rp2350` | Automated Pico 2 debug gate: flash, hw breakpoints, stepping, .mojo source lines |
 | `pixi run chart` | Regenerate `docs/assets/benchmarks.svg` from the last bench run |
 | `pixi run build-debug` / `flash-debug` | Debug firmware, used by the VS Code F5 flow |
 
@@ -246,6 +251,34 @@ probe-rs's *launch* flow arms breakpoints while the RP2040 is halted in the boot
 ROM, where they never take effect, so the default configuration flashes first and
 *attaches*. Mainline OpenOCD + GDB has a related RP2040 bug where breakpoints stop
 re-arming after the first hit; `probe-rs` tooling is recommended for CLI debugging.
+
+### Debugging the Pico 2 (RP2350, RISC-V)
+
+The same F5 standard, different plumbing: probe-rs has no RISC-V RP2350
+support, so the Pico 2 uses the
+[raspberrypi/openocd](https://github.com/raspberrypi/openocd) fork, which
+reaches the Hazard3 cores' RISC-V Debug Module (spec 0.13.2: run/halt,
+single-step, 4 hardware breakpoint triggers per core) through the same SWD
+probe at AP `0xa000`. `gdb-multiarch` speaks to openocd; the VS Code config
+"inmojomni Pico 2 (RISC-V flash + debug)" builds a debug firmware, flashes
+it over SWD (no BOOTSEL button) and gives breakpoints in `.mojo` sources,
+stepping, registers and memory. Build the fork once:
+
+```sh
+sudo apt install libtool automake autoconf texinfo libusb-1.0-0-dev libhidapi-dev gdb-multiarch
+git clone --depth 1 https://github.com/raspberrypi/openocd && cd openocd
+git submodule update --init --depth 1 jimtcl
+./bootstrap && ./configure --prefix=$HOME/.local --enable-cmsis-dap \
+    --enable-cmsis-dap-v2 --enable-internal-jimtcl --disable-werror
+make -j$(nproc) && make install
+```
+
+Everything above is enforced by an automated gate — `pixi run
+debug-test-rp2350` flashes over SWD with verify, then asserts: a hardware
+breakpoint on `mojo_main` hits, single-stepping advances the PC, memory and
+CSR reads return known values (`misa` = rv32imac), and a hardware
+breakpoint set on the `.mojo` source line of `led.toggle()` hits on two
+consecutive blink iterations.
 
 ## SDK overview
 
@@ -580,13 +613,14 @@ docs/                BENCHMARKS.md, design notes
 
 - No I²C, SPI, DMA or USB drivers yet; UART is polled TX/RX only (no
   interrupts, no RX ring buffer).
-- **RP2350 / Pico 2 support is native build + GPIO blink, hardware-verified.**
-  The rest of the SDK (PIO, PWM, ADC, UART, interrupts, dual-core) is
-  chip-generic in source and compiles for the RP2350, but is exercised on
-  real hardware only on the RP2040 so far — the 26-test on-target suite is
-  RP2040. Flashing the RP2350 requires the board in BOOTSEL (probe-rs 0.31
-  cannot attach to the running Hazard3 core over SWD), then
-  `probe-rs download --chip RP235x --verify` or a UF2.
+- **RP2350 / Pico 2: hardware-verified surface is blink, GPIO, PIO (incl.
+  PIO2), dual-core, the four-language benchmark, probe flashing and
+  source-level debugging.** PWM, ADC, UART, RTT and interrupts are
+  chip-generic in source and compile for the RP2350, but are exercised on
+  real hardware only on the RP2040 so far. probe-rs cannot attach to a
+  running Hazard3 (its RP235x target drives the M33 debug AP); flashing and
+  debugging go through the raspberrypi/openocd fork instead — see
+  [Debugging](#debugging-the-pico-2-rp2350-risc-v).
 - The toolchain tracks Mojo *nightly*; a compiler update can require a new
   retarget rule (mechanical, test-guarded, but a moving target). A scheduled
   CI job re-tests against the newest nightly daily, so breakage surfaces

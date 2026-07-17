@@ -160,6 +160,16 @@ def build(main_mojo: String, name: String, debug: Bool) raises -> String:
     return elf
 
 
+def openocd_rp2350() raises -> String:
+    """The RP2350-capable openocd binary. Ubuntu's openocd 0.12 has no
+    rp2350 target files; the raspberrypi/openocd fork installed to
+    ~/.local/bin is preferred, falling back to whatever is on PATH."""
+    var probe = sh("test -x $HOME/.local/bin/openocd && echo yes || true")
+    if String(probe.strip()) == "yes":
+        return sh("echo -n $HOME/.local/bin/openocd")
+    return String("openocd")
+
+
 def build_rv32(main_mojo: String, name: String, debug: Bool) raises -> String:
     """RP2350 (Pico 2) native path.
 
@@ -264,24 +274,26 @@ def main() raises:
         print("UF2 ready:", uf2_path)
 
     if flash:
-        # RP2350: probe-rs has NO `RP235x_riscv` target (checked 0.30/0.31);
-        # use `RP235x` (the Arm/M33 view programs flash — content is
-        # architecture-neutral). The M33 debug AP only responds while the
-        # M33 is alive, i.e. in BOOTSEL — verified on hardware that a plain
-        # attach faults once a RISC-V image is running. So RP2350 flashing
-        # REQUIRES the board in BOOTSEL (hold BOOTSEL + replug). --verify is
-        # mandatory: a UF2 drag-drop from a no-USB picotool silently failed
-        # to produce a booting image. After reset the bootrom sees the
-        # IMAGE_DEF and arch-switches to Hazard3.
-        var target = String("RP235x") if chip == "rp2350" else String("RP2040")
         if chip == "rp2350":
-            print(
-                "[flash] RP2350 needs the board in BOOTSEL"
-                " (hold BOOTSEL + replug), then:"
+            # probe-rs has no RISC-V RP2350 target (its RP235x target
+            # drives the M33 APs, which fault while the cores run
+            # RISC-V). The raspberrypi/openocd fork reaches the Hazard3
+            # Debug Module at AP 0xa000 instead: flash + verify + reset
+            # over SWD with the firmware running — no BOOTSEL button.
+            # Hardware-verified 2026-07-17. Build the fork with
+            # --enable-cmsis-dap-v2 and install to ~/.local (README).
+            print("[flash] openocd (rp2350-riscv) -> program+verify+reset")
+            _ = shx(
+                openocd_rp2350()
+                + " -f interface/cmsis-dap.cfg"
+                + ' -c "adapter speed 1000"'
+                + " -f target/rp2350-riscv.cfg"
+                + ' -c "program ' + elf + ' verify reset exit"'
             )
-        print("[flash] probe-rs ->", target)
-        _ = shx(
-            String("probe-rs download --chip ") + target + " --verify " + elf
-        )
-        _ = shx(String("probe-rs reset --chip ") + target)
+        else:
+            print("[flash] probe-rs -> RP2040")
+            _ = shx(
+                String("probe-rs download --chip RP2040 --verify ") + elf
+            )
+            _ = shx("probe-rs reset --chip RP2040")
         print("flashed + reset OK")

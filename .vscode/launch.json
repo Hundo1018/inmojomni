@@ -10,6 +10,32 @@
     "version": "0.2.0",
     "configurations": [
         {
+            // Pico 2 / RP2350 (Hazard3 RISC-V). Needs the
+            // raspberrypi/openocd fork in ~/.local/bin (README) and
+            // gdb-multiarch. Flash happens in the preLaunchTask over
+            // SWD (no BOOTSEL); openocd is auto-started as the debug
+            // server. Breakpoints in flash need the hardware triggers
+            // (4 per core), hence "require".
+            "preLaunchTask": "inmojomni: build+flash rp2350 (debug)",
+            "type": "cppdbg",
+            "request": "launch",
+            "name": "inmojomni Pico 2 (RISC-V flash + debug)",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/build/main_rp2350_debug.elf",
+            "miDebuggerPath": "gdb-multiarch",
+            "miDebuggerServerAddress": "localhost:3333",
+            "debugServerPath": "${env:HOME}/.local/bin/openocd",
+            "debugServerArgs": "-f interface/cmsis-dap.cfg -c \"adapter speed 1000\" -f target/rp2350-riscv.cfg",
+            "serverStarted": "Listening on port 3333",
+            "filterStderr": true,
+            "stopAtEntry": false,
+            "hardwareBreakpoints": { "require": true, "limit": 4 },
+            "setupCommands": [
+                { "text": "monitor reset halt" }
+            ]
+        },
+
+        {
             "preLaunchTask": "inmojomni: build+flash (debug)",
             "type": "probe-rs-debug",
             "request": "attach",

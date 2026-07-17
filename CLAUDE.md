@@ -35,8 +35,14 @@ ONLY for `test`/`test-host` (they print `=== summary ===`); for builds use
 
 ## Hardware facts (this user's bench)
 
-- One Pico + one CMSIS-DAP Debug Probe. **The probe is a mutex** — never let
-  two agents/commands use SWD concurrently, including background polls.
+- One Pico + one Pico 2 + one CMSIS-DAP Debug Probe. **The probe is a
+  mutex** — never let two agents/commands use SWD concurrently, including
+  background polls (openocd gdb-server counts: kill it when done).
+- RP2350 flash/debug go through ~/.local/bin/openocd (raspberrypi fork;
+  Ubuntu's 0.12 lacks rp2350 targets). Flash: `pixi run flash-rp2350`.
+  Debug gate: `pixi run debug-test-rp2350`. probe-rs still cannot attach
+  to a running Hazard3. Consult wren6991/hazard3 repo for core facts
+  (user directive; see memory).
 - SWD wiring is marginal: tools already flash at `--speed 1000 --verify` with
   one retry (hil.py / hil.mojo). Don't remove these. Unverified flashes have
   silently corrupted and produced phantom bugs (cost: a full bisect session).
