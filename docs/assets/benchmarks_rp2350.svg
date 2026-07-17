@@ -1,0 +1,97 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="860" height="742" viewBox="0 0 860 742" font-family="ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif">
+<rect x="0" y="0" width="860" height="742" fill="#ffffff" rx="8" stroke="#d0d7de"/>
+<text x="20" y="30" font-size="16" fill="#1f2328" text-anchor="start" font-weight="600">Execution time relative to C (clang -O2) &#8212; lower is better</text>
+<text x="20" y="50" font-size="12" fill="#57606a" text-anchor="start" font-weight="400">RP2350 (Pico 2, Hazard3 RISC-V, rv32imac) &#183; cycle counts via mcycle &#183; medians of 3 runs &#183; checksums verified across all four languages</text>
+<rect x="737" y="22" width="10" height="10" fill="#94A3B8" rx="2"/>
+<text x="751" y="31" font-size="11" fill="#57606a" text-anchor="start" font-weight="400">C (gcc -O2)</text>
+<rect x="641" y="22" width="10" height="10" fill="#DEA584" rx="2"/>
+<text x="655" y="31" font-size="11" fill="#57606a" text-anchor="start" font-weight="400">Rust (-O2)</text>
+<rect x="524" y="22" width="10" height="10" fill="#3E7CB1" rx="2"/>
+<text x="538" y="31" font-size="11" fill="#57606a" text-anchor="start" font-weight="400">C (clang -O2)</text>
+<rect x="470" y="22" width="10" height="10" fill="#F74C00" rx="2"/>
+<text x="484" y="31" font-size="11" fill="#57606a" text-anchor="start" font-weight="400">Mojo</text>
+<text x="238" y="110" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">100k GPIO toggles (SIO XOR)</text>
+<rect x="250" y="78" width="228" height="12" fill="#F74C00" rx="2"/>
+<text x="484" y="88" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="92" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="102" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="106" width="228" height="12" fill="#DEA584" rx="2"/>
+<text x="484" y="116" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="120" width="228" height="12" fill="#94A3B8" rx="2"/>
+<text x="484" y="130" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<text x="238" y="180" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">200k xorshift32 rounds</text>
+<rect x="250" y="148" width="228" height="12" fill="#F74C00" rx="2"/>
+<text x="484" y="158" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="162" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="172" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="176" width="228" height="12" fill="#DEA584" rx="2"/>
+<text x="484" y="186" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="190" width="228" height="12" fill="#94A3B8" rx="2"/>
+<text x="484" y="200" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<text x="238" y="250" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">50k u32 divisions (hardware M)</text>
+<rect x="250" y="218" width="228" height="12" fill="#F74C00" rx="2"/>
+<text x="484" y="228" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="232" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="242" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="246" width="228" height="12" fill="#DEA584" rx="2"/>
+<text x="484" y="256" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="260" width="218" height="12" fill="#94A3B8" rx="2"/>
+<text x="474" y="270" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">0.96&#215;</text>
+<text x="238" y="320" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">20k float32 mul-adds (soft-float)</text>
+<rect x="250" y="288" width="235" height="12" fill="#F74C00" rx="2"/>
+<text x="491" y="298" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.03&#215;</text>
+<rect x="250" y="302" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="312" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="316" width="110" height="12" fill="#DEA584" rx="2"/>
+<text x="366" y="326" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">0.49&#215;</text>
+<rect x="250" y="330" width="229" height="12" fill="#94A3B8" rx="2"/>
+<text x="485" y="340" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.01&#215;</text>
+<text x="238" y="390" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">100k noinline function calls</text>
+<rect x="250" y="358" width="256" height="12" fill="#F74C00" rx="2"/>
+<text x="512" y="368" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.13&#215;</text>
+<rect x="250" y="372" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="382" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="386" width="256" height="12" fill="#DEA584" rx="2"/>
+<text x="512" y="396" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.13&#215;</text>
+<rect x="250" y="400" width="256" height="12" fill="#94A3B8" rx="2"/>
+<text x="512" y="410" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.13&#215;</text>
+<text x="238" y="460" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">CRC-32 over 4 KB x4 (bitwise)</text>
+<rect x="250" y="428" width="429" height="12" fill="#F74C00" rx="2"/>
+<text x="685" y="438" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.88&#215;</text>
+<rect x="250" y="442" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="452" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="456" width="226" height="12" fill="#DEA584" rx="2"/>
+<text x="482" y="466" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">0.99&#215;</text>
+<rect x="250" y="470" width="401" height="12" fill="#94A3B8" rx="2"/>
+<text x="657" y="480" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.76&#215;</text>
+<text x="238" y="530" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">quicksort 512 u32 x20</text>
+<rect x="250" y="498" width="309" height="12" fill="#F74C00" rx="2"/>
+<text x="565" y="508" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.36&#215;</text>
+<rect x="250" y="512" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="522" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="526" width="226" height="12" fill="#DEA584" rx="2"/>
+<text x="482" y="536" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="540" width="189" height="12" fill="#94A3B8" rx="2"/>
+<text x="445" y="550" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">0.83&#215;</text>
+<text x="238" y="600" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">16x16 u32 matmul x50 (hardware M)</text>
+<rect x="250" y="568" width="480" height="12" fill="#F74C00" rx="2"/>
+<text x="736" y="578" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">2.11&#215;</text>
+<rect x="250" y="582" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="592" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="596" width="226" height="12" fill="#DEA584" rx="2"/>
+<text x="482" y="606" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">0.99&#215;</text>
+<rect x="250" y="610" width="412" height="12" fill="#94A3B8" rx="2"/>
+<text x="668" y="620" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.81&#215;</text>
+<text x="238" y="670" font-size="12" fill="#1f2328" text-anchor="end" font-weight="400">recursive fib(24)</text>
+<rect x="250" y="638" width="236" height="12" fill="#F74C00" rx="2"/>
+<text x="492" y="648" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.04&#215;</text>
+<rect x="250" y="652" width="228" height="12" fill="#3E7CB1" rx="2"/>
+<text x="484" y="662" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.00&#215;</text>
+<rect x="250" y="666" width="243" height="12" fill="#DEA584" rx="2"/>
+<text x="499" y="676" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">1.07&#215;</text>
+<rect x="250" y="680" width="165" height="12" fill="#94A3B8" rx="2"/>
+<text x="421" y="690" font-size="10" fill="#57606a" text-anchor="start" font-weight="400">0.73&#215;</text>
+<line x1="478" y1="70" x2="478" y2="700" stroke="#d0d7de" stroke-dasharray="3,3"/>
+<text x="478" y="64" font-size="10" fill="#8b949e" text-anchor="middle" font-weight="400">1.00&#215; (clang)</text>
+<text x="20" y="728" font-size="10" fill="#8b949e" text-anchor="start" font-weight="400">Generated by `pixi run chart` from build/bench_rp2350_results.csv</text>
+</svg>

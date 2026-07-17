@@ -86,6 +86,106 @@ four languages, for every workload.
    here is 0–2 µs on most workloads). A later startup-code change shifted
    every firmware by 20 bytes and reproduced all nine timings within 1 µs.
 
+## RP2350 / Pico 2 results (measured 2026-07-17)
+
+The same nine kernel bodies, on the Pico 2's Hazard3 RISC-V cores.
+Methodology differences from the RP2040 run, in fairness-relevant order:
+
+- **ISA: rv32imac for all four languages** (hardware multiply/divide —
+  matching the silicon instead of handicapping it). Mojo emits it natively
+  (`--target-features=+m,+a,+c`); baselines are riscv-gcc `-O2`, clang `-O2`
+  and Rust `-C opt-level=2` for `riscv32imac-unknown-none-elf`. All four link
+  the same `crt0_rv32.S`, `link_rv32.ld` and the rv32imac `libgcc`.
+- **Timing: the `mcycle` CSR** through one shared `read_mcycle` symbol.
+  Results are CPU cycles: ratios are exact regardless of the ring
+  oscillator's frequency drift (the board runs at the boot ROSC clock).
+- **Result channel: flash mailbox + PICOBOOT.** The firmware commits its
+  result page to a reserved flash sector and reboots into BOOTSEL, where the
+  host reads it over USB. No debug probe, no button press, no polling that
+  could steal bus cycles mid-run. (Verified on hardware: the RP2350 bootrom
+  clears **all** of main SRAM on any reboot into BOOTSEL, and the Arm debug
+  AP faults while the cores run RISC-V — an RP2040-style RAM mailbox is
+  impossible on this path.)
+- Same gates: checksums identical across runs and across languages
+  (enforced), cross-run spread < 2% (enforced), a per-language id in the
+  mailbox header so a stale page can never pass as a fresh result.
+
+| Workload | Mojo | C (gcc) | C (clang) | Rust | Mojo / clang |
+|---|---:|---:|---:|---:|---:|
+| 100k GPIO toggles (volatile) | 300,013 | 300,013 | 300,011 | 300,012 | 1.00 |
+| 200k xorshift32 rounds | 1,600,014 | 1,600,013 | 1,600,013 | 1,600,014 | 1.00 |
+| 50k u32 divisions (hardware M) | 1,250,016 | 1,200,016 | 1,250,010 | 1,250,016 | 1.00 |
+| 20k float32 mul-adds (soft-float) | 6,128,786 | 5,968,394 | 5,928,380 | 2,876,368 | 1.03 |
+| 100k noinline function calls | 900,011 | 900,010 | 800,008 | 900,011 | 1.13 |
+| CRC-32 over 4 KB ×4 (bitwise) | 1,187,884 | 1,110,053 | 630,846 | 626,741 | 1.88 |
+| quicksort 512 u32 ×20 | 1,885,255 | 1,153,999 | 1,387,042 | 1,380,228 | 1.36 |
+| 16×16 u32 matmul ×50 (hardware M) | 1,853,061 | 1,593,616 | 880,065 | 874,409 | 2.11 |
+| recursive fib(24) | 1,961,602 | 1,372,190 | 1,886,573 | 2,018,912 | 1.04 |
+
+*(cycles; medians of 3 runs; lower is better)*
+
+### Interpretation (RP2350)
+
+1. **The Hazard3 is cycle-deterministic.** Runs 2 and 3 agree to the cycle
+   in all 36 firmware×workload cells; run 1 differs only through the cold
+   XIP cache. This makes cycle counts unusually trustworthy here.
+2. **Straight-line parity again.** GPIO, xorshift, division, soft-float and
+   fib land at 1.00–1.04× of clang C — same picture as the RP2040.
+3. **The nested-loop kernels are a real gap on this path.** CRC-32 runs at
+   1.88× and matmul at 2.11× of clang C (quicksort 1.36×) — clearly larger
+   than the same kernels' gap on the RP2040/Arm path (0.85×/0.87×/1.13×).
+   Same LLVM family, same kernel source: the difference is in what the Mojo
+   frontend hands the RISC-V backend for these loop nests. Reported as-is;
+   an open item, not smoothed over.
+4. **The Rust soft-float row compares libraries, not languages.** Rust's
+   `compiler_builtins` f32 path is ~2.1× faster than the libgcc soft-float
+   the other three link. Same caveat as the RP2040 run, opposite magnitude.
+5. Firmware `.text`: Mojo 3,790 B — the smallest of the four (clang
+   4,184 B, gcc 4,496 B, Rust 13,658 B, which drags in its own intrinsics).
+
+Reproduce: `pixi run bench-rp2350` with a Pico 2 in BOOTSEL mode (no probe
+needed), then `pixi run chart build/bench_rp2350_results.csv
+docs/assets/benchmarks_rp2350.svg "<subtitle>"`.
+
+## Language-feature measurements, RP2350 (measured 2026-07-17)
+
+Sixteen on-silicon measurements of Mojo language mechanics (10k iterations
+each, seeded through a volatile load so nothing constant-folds; every claim
+below is enforced by a checksum or size assertion in the driver).
+Reproduce: `pixi run features-rp2350`.
+
+| Measurement | cycles/iter | Paired against | cycles/iter |
+|---|---:|---|---:|
+| trait-bound generic call | 6.03 | direct call | 6.04 |
+| comptime-materialized LUT | 27.11 | recomputing inline | 11.04 |
+| `comptime for` unrolled ×16 | 63.15 | runtime loop ×16 | 106.04 |
+| `@no_inline` call | 9.04 | `@always_inline` | ~0 (loop strength-reduced) |
+
+- **Traits are zero-cost**: the trait-generic and direct versions agree to
+  0.2% (monomorphized; identical checksums).
+- **A comptime lookup table is not free on an XIP part**: the table lives in
+  flash, so each lookup pays the XIP path while the recomputation stays in
+  registers — the LUT loses by 2.5×. Measure before caching.
+- `size_of` reports 4/8/12 for packed u32 structs and 16 for
+  `{3×u32, u8}` (tail padding to alignment).
+
+**Struct-passing boundary** (by-value through an `@no_inline` call,
+cycles/call):
+
+| Argument | cycles/call |
+|---|---:|
+| 8 B `TrivialRegisterPassable` | 10.02 |
+| 8 B plain struct (owned) | 10.05 |
+| 16 B plain struct | 12.03 |
+| 32 B plain struct | 16.06 |
+| 64 B plain struct | 26.07 |
+| returning a 16 B struct | 18.05 |
+
+The register boundary sits at 8 bytes — the RISC-V ilp32 ABI's two argument
+registers — and an 8-byte *memory* struct already passes as cheaply as a
+`TrivialRegisterPassable` one. Beyond that, cost grows linearly with the
+copy (~4 cycles per 16 bytes).
+
 ## Binary size (measured)
 
 All firmwares below share the identical rig — crt0.S, link.ld, 256 B boot2,

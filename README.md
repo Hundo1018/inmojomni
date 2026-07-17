@@ -5,9 +5,9 @@
 [![CI](https://github.com/Hundo1018/inmojomni/actions/workflows/ci.yml/badge.svg)](https://github.com/Hundo1018/inmojomni/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Mojo](https://img.shields.io/badge/Mojo-nightly-F74C00)](https://docs.modular.com/mojo/)
-[![Platform](https://img.shields.io/badge/platform-RP2040%20(Cortex--M0%2B)-8A2BE2)](https://www.raspberrypi.com/documentation/microcontrollers/silicon.html)
+[![Platform](https://img.shields.io/badge/platform-RP2040%20(Cortex--M0%2B)%20%7C%20RP2350%20(Hazard3%20RISC--V)-8A2BE2)](https://www.raspberrypi.com/documentation/microcontrollers/silicon.html)
 
-**Bare-metal Raspberry Pi Pico (RP2040) firmware, written in Mojo.**
+**Bare-metal Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) firmware, written in Mojo.**
 
 No OS, no C application layer. The application and the SDK are pure Mojo; startup is
 about 60 lines of assembly and one linker script. A complete blink firmware is
@@ -119,6 +119,21 @@ Build it with `pixi run mojo run -I tools tools/build.mojo --chip rp2350`. The
 result is a native RISC-V image (`picotool` reports image type RISC-V), verified
 booting and blinking on a Pico 2.
 
+Verified on Pico 2 hardware beyond blink: **PIO** (a state-machine square wave
+observed back through the pad input path — on PIO0 and on the RP2350-only
+PIO2), **dual-core** (bootrom FIFO handshake, RISC-V flavour: mtvec +
+`h3.unblock`; core 1 result checked over both the FIFO and volatile RAM), and
+the full [four-language benchmark](#rp2350--pico-2-hazard3-risc-v) below. The
+same `StateMachine[P, SM]` and `multicore.launch()` drive both chips; the chip
+is one more compile-time parameter.
+
+RP2350 tests run through a fully automated loop that needs **no debug probe
+and no button**: the firmware writes results to a reserved flash sector and
+reboots itself into BOOTSEL via the ROM, where the host reads the sector back
+over PICOBOOT USB (the RP2350 bootrom clears all of SRAM on reboot, so a RAM
+mailbox cannot exist, and the Arm debug AP faults while the cores run RISC-V —
+both facts verified on hardware and designed around).
+
 ## Getting started
 
 ### Hardware
@@ -176,6 +191,9 @@ pixi run flash      # build + flash over SWD; the LED starts blinking
 | `pixi run test` | Full test suite; hardware stages are skipped when no probe is attached |
 | `pixi run test-host` | Host-only tests (no hardware required) |
 | `pixi run bench` | On-target Mojo vs C vs Rust benchmark (requires probe, `clang`, `rustc`) |
+| `pixi run bench-rp2350` | Same four-language benchmark on a Pico 2 in BOOTSEL (no probe needed) |
+| `pixi run features-rp2350` | Mojo language-feature measurements on Pico 2 silicon |
+| `pixi run piomc-rp2350` | Pico 2 PIO (incl. PIO2) + dual-core hardware proof |
 | `pixi run chart` | Regenerate `docs/assets/benchmarks.svg` from the last bench run |
 | `pixi run build-debug` / `flash-debug` | Debug firmware, used by the VS Code F5 flow |
 
@@ -415,6 +433,12 @@ probe is present.
 GPIO tests require no wiring: input-enable is on by default, so driven outputs
 are read back through `GPIO_IN`.
 
+RP2350 on-target verification runs through the probe-free flash-mailbox loop
+instead (see above): `pixi run piomc-rp2350` gates the dual-core launch (FIFO
+and RAM result paths against a host-recomputed value) and PIO0/PIO2 square
+waves observed through the pad input path; `pixi run bench-rp2350` and
+`pixi run features-rp2350` enforce their own checksum gates.
+
 ## Benchmarks
 
 Measured on hardware: same board, same startup code, same linker script, same
@@ -452,6 +476,51 @@ sizes and caveats: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Reproduce:
 `pixi run bench` (probe, `clang`, and `rustc` with the `thumbv6m-none-eabi`
 target), then `pixi run chart`.
 
+### RP2350 / Pico 2 (Hazard3, RISC-V)
+
+The same nine workloads on the Pico 2, with every language compiled for
+**rv32imac** (the Hazard3's actual ISA — hardware multiply and divide) and
+timed by the **`mcycle` cycle counter** through one shared `read_mcycle`
+symbol, so results are CPU cycles and immune to ring-oscillator frequency
+drift. No probe and no button: results return over the flash-mailbox /
+PICOBOOT loop described above. Same gates: identical checksums across runs
+and languages, cross-run spread under 2%.
+
+![RP2350 benchmark results](docs/assets/benchmarks_rp2350.svg)
+
+| Workload | Mojo | C (gcc) | C (clang) | Rust | Mojo / clang |
+|---|---:|---:|---:|---:|---:|
+| 100k GPIO toggles (volatile) | 300,013 | 300,013 | 300,011 | 300,012 | 1.00 |
+| 200k xorshift32 rounds | 1,600,014 | 1,600,013 | 1,600,013 | 1,600,014 | 1.00 |
+| 50k u32 divisions (hardware M) | 1,250,016 | 1,200,016 | 1,250,010 | 1,250,016 | 1.00 |
+| 20k float32 mul-adds (soft-float) | 6,128,786 | 5,968,394 | 5,928,380 | 2,876,368 | 1.03 |
+| 100k noinline function calls | 900,011 | 900,010 | 800,008 | 900,011 | 1.13 |
+| CRC-32 over 4 KB ×4 (bitwise) | 1,187,884 | 1,110,053 | 630,846 | 626,741 | 1.88 |
+| quicksort 512 u32 ×20 | 1,885,255 | 1,153,999 | 1,387,042 | 1,380,228 | 1.36 |
+| 16×16 u32 matmul ×50 (hardware M) | 1,853,061 | 1,593,616 | 880,065 | 874,409 | 2.11 |
+| recursive fib(24) | 1,961,602 | 1,372,190 | 1,886,573 | 2,018,912 | 1.04 |
+
+*(cycles; lower is better)*
+
+The Hazard3 is cycle-deterministic: runs 2 and 3 agree **to the cycle** in
+every implementation (run 1 differs only by cold XIP cache; medians absorb
+it). On straight-line code Mojo again matches same-backend C to within
+rounding. On the nested-loop kernels this path is slower than clang C —
+1.88× on CRC-32 and 2.11× on matmul — a larger gap than the same workloads
+show on the RP2040/Arm path, and an open item worth investigating rather
+than a rounding artifact. The Rust soft-float row again compares runtime
+libraries, not languages (its compiler-builtins beat libgcc's soft-float
+roughly 2×). Mojo produces the smallest firmware of the four
+(`.text` 3,790 B vs 4,184–13,658 B). Reproduce: `pixi run bench-rp2350`
+(Pico 2 in BOOTSEL; `clang`, riscv-gcc, and `rustc` with the
+`riscv32imac-unknown-none-elf` target).
+
+Language-feature measurements on the same silicon (traits are zero-cost;
+the struct-passing register boundary is 8 bytes; a comptime lookup table in
+XIP flash loses to recomputation by 2.5×) live in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md); reproduce with
+`pixi run features-rp2350`.
+
 ## Project layout
 
 ```
@@ -464,10 +533,15 @@ examples/            pio_blink.mojo, ...
 runtime/             crt0.S / link.ld / boot2.bin (RP2040),
                      crt0_rv32.S / link_rv32.ld / rp2350_image_def.S (RP2350)
 tools/               Mojo: build.mojo (pipeline), retarget.mojo (IR pass),
-                     check_elf.mojo, bench.mojo, chart.mojo, hil.mojo
-                     Python (test rig only): run_tests.py, hil.py, dap_client.py
-tests/               host/ (unit), compile_fail/, on_target/ (on-board Mojo suite)
-bench/               bench.mojo + bench.c + bench.rs (identical workloads)
+                     check_elf.mojo, bench.mojo, bench_rp2350.mojo,
+                     features_rp2350.mojo, piomc_rp2350.mojo, chart.mojo, hil.mojo
+                     Python (test rig only): run_tests.py, hil.py, dap_client.py,
+                     picoboot_read.py (PICOBOOT USB reader for the RP2350 loop)
+tests/               host/ (unit), compile_fail/, on_target/ (on-board Mojo
+                     suite), on_target_rp2350/ (Pico 2: readback gate, feature
+                     measurements, PIO + dual-core proof)
+bench/               bench.mojo + bench.c + bench.rs (identical workloads),
+                     bench_rp2350.* (same kernels, rv32imac + mcycle)
 docs/                BENCHMARKS.md, design notes
 .github/workflows/   CI: host test suite + firmware size gate
 .vscode/             F5 debug configuration + RP2040 SVD
