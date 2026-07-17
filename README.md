@@ -68,19 +68,26 @@ def start() abi("C"):
   (verified by `.text` diff). Confirmed booting and blinking on real Pico 2
   silicon.
 
+## What works today
+
+| Capability | RP2040 (Pico) | RP2350 (Pico 2) | Verified by |
+|---|---|---|---|
+| Native-feeling SDK (`Pin[N]`, `init`, `sleep_ms`) | ✅ | ✅ | on-target tests / blink |
+| Build pipeline | IR retarget → Arm | **direct RISC-V emit** | ELF checks, `picotool` image type |
+| GPIO in/out, pulls, events | ✅ | ✅ (in/out) | electrical read-back via `GPIO_IN` |
+| PIO state machines (comptime assembler) | ✅ | ✅ incl. **PIO2** | square wave observed on the pad |
+| Dual-core launch + inter-core FIFO | ✅ | ✅ | host-recomputed checksum, both paths |
+| Timer, PWM, ADC, UART, RTT, NVIC interrupts | ✅ | — not yet | 26-test HIL suite (SWD) |
+| VS Code F5 debugging | ✅ | — (probe limits) | automated DAP-protocol test |
+| Four-language benchmark | ✅ | ✅ | checksum equality across languages |
+| Automated on-hardware testing | SWD mailbox | **probe-free flash mailbox** | every claim above |
+
 ## How it works
 
 Mojo's bundled LLVM has no 32-bit ARM backend. The build pipeline works around
 this by emitting IR for a target with an identical data model, then retargeting:
 
-```mermaid
-flowchart LR
-    A["main.mojo + pico SDK"] -->|"mojo build --emit=llvm<br>target: riscv32 (same ILP32, LE)"| B["LLVM IR"]
-    B -->|"retarget_ir(): rewrite triple +<br>datalayout to thumbv6m"| C["ARMv6-M IR"]
-    C -->|"system opt -O2, llc -O2"| D["Cortex-M0+ object"]
-    D -->|"arm-none-eabi-gcc link:<br>crt0.S + link.ld + boot2 + libgcc"| E["firmware.elf"]
-    E -->|"probe-rs (SWD) or UF2"| F["RP2040"]
-```
+![Build pipeline: Mojo emits riscv32 IR, tools/retarget.mojo rewrites it to ARMv6-M, the system LLVM finishes the job](docs/assets/pipeline.svg)
 
 riscv32 and ARMv6-M share the ILP32 little-endian data model, so the IR is
 layout-compatible; the retarget step rewrites the triple and datalayout and
@@ -115,6 +122,13 @@ def start() abi("C"):
         sleep_ms(250)
 ```
 
+```mermaid
+flowchart LR
+    A["main_rp2350.mojo + pico SDK"] -->|"mojo build --emit=object<br>riscv32, +m +a +c"| B["rv32imac object"]
+    B -->|"ld.lld: crt0_rv32.S +<br>IMAGE_DEF block + link_rv32.ld"| C["firmware.elf / .uf2"]
+    C -->|"UF2 copy (BOOTSEL)<br>or probe-rs"| D["RP2350"]
+```
+
 Build it with `pixi run mojo run -I tools tools/build.mojo --chip rp2350`. The
 result is a native RISC-V image (`picotool` reports image type RISC-V), verified
 booting and blinking on a Pico 2.
@@ -128,11 +142,24 @@ same `StateMachine[P, SM]` and `multicore.launch()` drive both chips; the chip
 is one more compile-time parameter.
 
 RP2350 tests run through a fully automated loop that needs **no debug probe
-and no button**: the firmware writes results to a reserved flash sector and
-reboots itself into BOOTSEL via the ROM, where the host reads the sector back
-over PICOBOOT USB (the RP2350 bootrom clears all of SRAM on reboot, so a RAM
-mailbox cannot exist, and the Arm debug AP faults while the cores run RISC-V —
-both facts verified on hardware and designed around).
+and no button**:
+
+```mermaid
+flowchart LR
+    A["host: copy .uf2 to<br>BOOTSEL drive"] --> B["firmware runs<br>(bench / tests)"]
+    B --> C["results + checksums to<br>flash sector 0x3FF000<br>(RAM-resident writer)"]
+    C --> D["ROM reboot<br>back into BOOTSEL (~1 s)"]
+    D --> E["host reads sector over<br>PICOBOOT USB and gates"]
+    E -.->|next firmware| A
+```
+
+The firmware writes results to a reserved flash sector and reboots itself into
+BOOTSEL via the ROM, where the host reads the sector back over PICOBOOT USB.
+The two obvious shortcuts do not exist on this chip — the RP2350 bootrom
+clears **all** of main SRAM on reboot (so an RP2040-style RAM mailbox is
+impossible), and the Arm debug AP faults while the cores run RISC-V (so SWD
+cannot poll a running Hazard3) — both facts verified on hardware and designed
+around. One 36-stage benchmark session runs unattended end to end.
 
 ## Getting started
 
@@ -415,6 +442,8 @@ test suite.
 - `UnsafePointer` and volatile access are confined to one module, `pico.mmio`.
 
 ## Testing
+
+![Hardware-in-the-loop test tiers](docs/assets/hw-tests.svg)
 
 `pixi run test` runs everything; stages that need hardware are skipped when no
 probe is present.
