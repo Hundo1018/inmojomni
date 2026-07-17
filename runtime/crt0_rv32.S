@@ -113,6 +113,106 @@ read_mcycle:
     csrr a0, mcycle
     ret
 
+/* --- core 1 support (RISC-V flavour) --------------------------------
+ * pico.multicore drives the bootrom's SIO-FIFO wake-up handshake with
+ * {0, 0, 1, mtvec, sp, entry}; core1_meta_word(i) hands it the
+ * link-time words (0=entry trampoline, 1=stack top, 2=mtvec value) so
+ * no fixed flash address is needed (unlike the Arm .core1_meta). The
+ * trampoline sets gp before any Mojo code runs on core 1; sp comes
+ * from the handshake. mojo_core1_main is weak: application code
+ * overrides it via @export("mojo_core1_main").
+ */
+.global core1_meta_word
+core1_meta_word:
+    /* Computed, not a .word table: an in-.text table got misaligned by
+     * linker relaxation (landed at xxx2) and Hazard3 has no hardware
+     * misaligned loads — the lw trapped core 0 during launch. */
+    li   t0, 1
+    beq  a0, t0, 1f
+    li   t0, 2
+    beq  a0, t0, 2f
+    la   a0, core1_trampoline
+    ret
+1:  la   a0, _core1_stack_top
+    ret
+2:  la   a0, _trap
+    ret
+
+.global core1_trampoline
+core1_trampoline:
+    .option push
+    .option norelax
+    la gp, __global_pointer$
+    .option pop
+    call mojo_core1_main
+1:  slt  x0, x0, x0          /* h3.block: park if it ever returns */
+    j 1b
+
+.weak mojo_core1_main
+mojo_core1_main:
+    j _trap
+
+/* sev from Mojo (no inline asm there): h3.unblock wakes core 1 out of
+ * the bootrom's h3.block wait. Encoded as a hint (slt x0, x0, x1), so
+ * it is harmless on cores that ignore it. */
+.global pico_sev
+pico_sev:
+    slt  x0, x0, x1
+    ret
+
+/* --- stdlib assert/io externs -> debugger trap ----------------------
+ * Mojo's runtime safety checks (e.g. InlineArray bounds) reference a
+ * tiny printf path. There is no OS here: any of these firing means a
+ * bug, so they all trap (ebreak halts under a debugger; otherwise the
+ * exception lands in _trap and parks). Mirror of the crt0.S stubs.
+ */
+__pico_mojo_trap:
+    ebreak
+    j __pico_mojo_trap
+
+.macro stub name
+.global \name
+.set \name, __pico_mojo_trap
+.endm
+
+stub dup
+stub fdopen
+stub fclose
+stub fflush
+stub fwrite
+stub write
+stub putchar
+stub abort
+stub exit
+stub KGEN_CompilerRT_fprintf
+stub KGEN_CompilerRT_AlignedAlloc
+stub KGEN_CompilerRT_AlignedFree
+
+/* memcpy/memset: freestanding rv32 has no libc, but Mojo codegen (and
+ * its assert formatting path) may emit calls to them. Real
+ * implementations, NOT traps — a large struct copy must work. */
+.global memcpy            /* void *memcpy(void *dst, const void *src, n) */
+memcpy:
+    mv   t0, a0
+1:  beqz a2, 2f
+    lbu  t1, 0(a1)
+    sb   t1, 0(t0)
+    addi a1, a1, 1
+    addi t0, t0, 1
+    addi a2, a2, -1
+    j 1b
+2:  ret
+
+.global memset            /* void *memset(void *dst, int c, size_t n) */
+memset:
+    mv   t0, a0
+1:  beqz a2, 2f
+    sb   a1, 0(t0)
+    addi t0, t0, 1
+    addi a2, a2, -1
+    j 1b
+2:  ret
+
 /* --- flash result mailbox -----------------------------------------------
  * The RP2350 bootrom clears ALL of main SRAM on any reboot into BOOTSEL
  * (verified on hardware 2026-07-17: 10 probes across every bank read 0,

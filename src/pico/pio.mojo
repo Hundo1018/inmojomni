@@ -33,15 +33,7 @@ Encodings follow the RP2040 datasheet §3.4.
 """
 
 from pico.mmio import read32, write32, write32_clr
-from pico.rp2040 import (
-    RESET_PIO0,
-    RESET_PIO1,
-    RESETS_RESET,
-    RESETS_RESET_DONE,
-)
-
-comptime PIO0_BASE: UInt32 = 0x5020_0000
-comptime PIO1_BASE: UInt32 = 0x5030_0000
+from pico.chips import Chip, RP2040
 
 # Register offsets within a PIO block.
 comptime _CTRL: UInt32 = 0x000
@@ -228,23 +220,32 @@ struct Asm(Copyable, ImplicitlyCopyable, Movable):
         self._emit(0xA042, delay, side)  # mov y, y
 
 
-struct StateMachine[P: Int, SM: Int](TrivialRegisterPassable):
-    """State machine `SM` of PIO block `P` — both compile-time checked."""
+struct StateMachine[P: Int, SM: Int, C: Chip = RP2040](
+    TrivialRegisterPassable
+):
+    """State machine `SM` of PIO block `P` — both compile-time checked.
+
+    Chip-generic: `C` supplies the base address, block count and RESETS
+    bit (the RP2350 adds PIO2 and moved the reset bits up by one)."""
 
     def __init__(out self):
-        comptime assert Self.P == 0 or Self.P == 1, "RP2040 has PIO0 and PIO1"
+        comptime assert 0 <= Self.P and Self.P < Self.C.NUM_PIO_BLOCKS, (
+            "PIO block index out of range for this chip"
+        )
         comptime assert 0 <= Self.SM and Self.SM < 4, (
             "each PIO block has state machines 0..3"
         )
         # Release the PIO block from reset (idempotent).
-        comptime reset_mask = RESET_PIO0 if Self.P == 0 else RESET_PIO1
-        write32_clr(RESETS_RESET, reset_mask)
-        while (read32(RESETS_RESET_DONE) & reset_mask) == 0:
+        comptime reset_mask = UInt32(1) << UInt32(
+            Self.C.RESET_PIO0_SHIFT + Self.P
+        )
+        write32_clr(Self.C.RESETS_RESET, reset_mask)
+        while (read32(Self.C.RESETS_RESET_DONE) & reset_mask) == 0:
             pass
 
     @always_inline
     def _base(self) -> UInt32:
-        return PIO0_BASE if Self.P == 0 else PIO1_BASE
+        return Self.C.PIO0_BASE + UInt32(Self.P) * 0x10_0000
 
     @always_inline
     def _sm_reg(self, offset: UInt32) -> UInt32:

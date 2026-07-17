@@ -14,12 +14,37 @@ natively — see src/main_rp2350.mojo and tools/build.mojo.
 
 from pico.gpio import Pin as _Pin
 from pico.board import init as _init
+from pico.multicore import (
+    fifo_pop as _fifo_pop,
+    fifo_push as _fifo_push,
+    halt_core1 as _halt_core1,
+    launch as _launch,
+)
+from pico.pio import StateMachine as _StateMachine
 from pico.time import sleep_ms as _sleep_ms
 from pico.chips import RP2350
 import pico.pins as pins
 
-# Partial parameter binding: on this board `Pin[N]` means `Pin[N, RP2350]`.
+# Partial parameter binding: on this board `Pin[N]` means `Pin[N, RP2350]`
+# and `StateMachine[P, SM]` targets the RP2350 (which adds PIO2).
 comptime Pin = _Pin[_, RP2350]
+comptime StateMachine = _StateMachine[_, _, RP2350]
+
+
+def launch_core1() -> Bool:
+    return _launch[RP2350]()
+
+
+def halt_core1():
+    _halt_core1[RP2350]()
+
+
+def fifo_push(v: UInt32, timeout_us: UInt32) -> Bool:
+    return _fifo_push[RP2350](v, timeout_us)
+
+
+def fifo_pop(timeout_us: UInt32) -> Tuple[Bool, UInt32]:
+    return _fifo_pop[RP2350](timeout_us)
 
 
 def init():

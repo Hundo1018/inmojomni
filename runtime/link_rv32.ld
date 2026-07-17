@@ -16,7 +16,8 @@ MEMORY {
 
 ENTRY(_reset)
 
-_stack_top = ORIGIN(RAM) + LENGTH(RAM);
+_stack_top = ORIGIN(RAM) + LENGTH(RAM);          /* core 0: scratch Y top */
+_core1_stack_top = ORIGIN(RAM) + LENGTH(RAM) - 4K;  /* core 1: scratch X top */
 
 SECTIONS {
     .image_def : {

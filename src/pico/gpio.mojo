@@ -35,6 +35,7 @@ struct Function:
     comptime SIO: UInt32 = 5
     comptime PIO0: UInt32 = 6
     comptime PIO1: UInt32 = 7
+    comptime PIO2: UInt32 = 8  # RP2350 only (RP2040 has no funcsel 8)
     comptime GPCK: UInt32 = 8  # clock in/out (GPIO20-25 only)
     comptime USB: UInt32 = 9   # VBUS det / VBUS en / overcurrent det
     comptime NONE: UInt32 = 0x1F

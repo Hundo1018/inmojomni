@@ -53,6 +53,18 @@ trait Chip:
     comptime SIO_GPIO_OE_SET: UInt32
     comptime SIO_GPIO_OE_CLR: UInt32
 
+    # --- multicore: PSM reset + inter-core SIO FIFO ---------------------
+    comptime IS_RISCV: Bool  # cores boot RISC-V (mtvec + h3.unblock)
+    comptime PSM_FRCE_OFF: UInt32
+    comptime PSM_PROC1: UInt32  # FRCE_OFF bit for core 1
+    comptime SIO_FIFO_ST: UInt32
+    comptime SIO_FIFO_WR: UInt32
+    comptime SIO_FIFO_RD: UInt32
+
+    # --- PIO -------------------------------------------------------------
+    comptime PIO0_BASE: UInt32  # PIOn = PIO0_BASE + n * 0x10_0000
+    comptime RESET_PIO0_SHIFT: Int  # RESETS bit index of PIO0 (PIOn = +n)
+
 
 struct RP2040(Chip):
     comptime NAME: StaticString = "RP2040"
@@ -81,6 +93,16 @@ struct RP2040(Chip):
     comptime SIO_GPIO_OE: UInt32 = 0xD000_0020
     comptime SIO_GPIO_OE_SET: UInt32 = 0xD000_0024
     comptime SIO_GPIO_OE_CLR: UInt32 = 0xD000_0028
+
+    comptime IS_RISCV: Bool = False
+    comptime PSM_FRCE_OFF: UInt32 = 0x4001_0004
+    comptime PSM_PROC1: UInt32 = 1 << 16
+    comptime SIO_FIFO_ST: UInt32 = 0xD000_0050  # VLD bit0, RDY bit1
+    comptime SIO_FIFO_WR: UInt32 = 0xD000_0054
+    comptime SIO_FIFO_RD: UInt32 = 0xD000_0058
+
+    comptime PIO0_BASE: UInt32 = 0x5020_0000
+    comptime RESET_PIO0_SHIFT: Int = 10
 
 
 struct RP2350(Chip):
@@ -119,6 +141,16 @@ struct RP2350(Chip):
     comptime SIO_GPIO_OE: UInt32 = 0xD000_0030
     comptime SIO_GPIO_OE_SET: UInt32 = 0xD000_0038
     comptime SIO_GPIO_OE_CLR: UInt32 = 0xD000_0040
+
+    comptime IS_RISCV: Bool = True
+    comptime PSM_FRCE_OFF: UInt32 = 0x4001_8004
+    comptime PSM_PROC1: UInt32 = 1 << 24
+    comptime SIO_FIFO_ST: UInt32 = 0xD000_0050  # VLD bit0, RDY bit1
+    comptime SIO_FIFO_WR: UInt32 = 0xD000_0054
+    comptime SIO_FIFO_RD: UInt32 = 0xD000_0058
+
+    comptime PIO0_BASE: UInt32 = 0x5020_0000
+    comptime RESET_PIO0_SHIFT: Int = 11
 
 
 struct PicoBoard:
