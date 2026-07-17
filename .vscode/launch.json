@@ -30,7 +30,7 @@
             "filterStderr": true,
             "stopAtEntry": false,
             "hardwareBreakpoints": { "require": true, "limit": 4 },
-            "setupCommands": [
+            "postRemoteConnectCommands": [
                 { "text": "monitor reset halt" }
             ]
         },
