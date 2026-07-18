@@ -204,7 +204,12 @@ def build_rv32(main_mojo: String, name: String, debug: Bool) raises -> String:
     _ = shx(mojo)
 
     print("[2/3] assemble RISC-V startup + RP2350 boot block")
-    var cc = String("clang --target=riscv32-unknown-none-elf -march=rv32i -c ")
+    # -mno-relax: linker relaxation has twice broken hand-alignment in
+    # crt0_rv32.S (a .word table, then mtvec's 4-byte target — its low
+    # bits are the MODE field). The startup file keeps its alignment.
+    var cc = String(
+        "clang --target=riscv32-unknown-none-elf -march=rv32i -mno-relax -c "
+    )
     _ = shx(cc + "runtime/crt0_rv32.S -o " + crt0)
     _ = shx(cc + "runtime/rp2350_image_def.S -o " + imgdef)
 

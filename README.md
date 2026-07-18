@@ -80,7 +80,8 @@ def start() abi("C"):
 | PIO state machines (comptime assembler) | ✅ | ✅ incl. **PIO2** | square wave observed on the pad |
 | Dual-core launch + inter-core FIFO | ✅ | ✅ | host-recomputed checksum, both paths |
 | 1 µs hardware timer, PWM, ADC, UART | ✅ | ✅ | HIL suite / ratio+loopback gates |
-| RTT, interrupts | ✅ NVIC | — in progress (Xh3irq) | 26-test HIL suite (SWD) |
+| External interrupts | ✅ NVIC | ✅ Xh3irq | timer-IRQ dispatch gate |
+| RTT logging over SWD | ✅ | ✅ | live control-block handshake gate |
 | VS Code F5 debugging (source-level) | ✅ | ✅ (openocd fork + gdb) | automated DAP / gdb gates |
 | Four-language benchmark | ✅ | ✅ | checksum equality across languages |
 | Probe flash + verify (no button) | ✅ probe-rs | ✅ openocd fork | verified write-back |
@@ -227,6 +228,8 @@ pixi run flash      # build + flash over SWD; the LED starts blinking
 | `pixi run piomc-rp2350` | Pico 2 PIO (incl. PIO2) + dual-core hardware proof |
 | `pixi run flash-rp2350` / `flash-debug-rp2350` | Build + flash Pico 2 over SWD (no BOOTSEL button) |
 | `pixi run debug-test-rp2350` | Automated Pico 2 debug gate: flash, hw breakpoints, stepping, .mojo source lines |
+| `pixi run periph-rp2350` | Pico 2 TIMER/PWM/ADC/UART + Xh3irq interrupt gates |
+| `pixi run rtt-rp2350` | Pico 2 live RTT handshake over SWD |
 | `pixi run chart` | Regenerate `docs/assets/benchmarks.svg` from the last bench run |
 | `pixi run build-debug` / `flash-debug` | Debug firmware, used by the VS Code F5 flow |
 

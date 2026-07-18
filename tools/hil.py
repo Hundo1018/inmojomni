@@ -58,7 +58,7 @@ def check_rtt() -> list[str]:
     """Independently verify the RTT block the suite left in RAM: the
     exact structure an RTT host tool would scan for and read."""
     words = read_words(RTT_BASE, 12)
-    if words[0:3] != [0x4747_4553, 0x5220_4552, 0x0000_5454]:
+    if words[0:3] != [0x4747_4553, 0x5220_5245, 0x0000_5454]:
         return [f"RTT magic wrong: {[hex(w) for w in words[0:3]]}"]
     max_up, max_down = words[4], words[5]
     buf_ptr, buf_size, wroff = words[7], words[8], words[9]

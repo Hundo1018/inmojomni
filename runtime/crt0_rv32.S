@@ -23,8 +23,9 @@ _reset:
     /* stack pointer = top of RAM (grows down) */
     la sp, _stack_top
 
-    /* trap vector -> park (any trap is a bug on bare metal) */
-    la t0, _trap
+    /* trap vector -> dispatcher: external IRQs (Xh3irq) are routed to
+     * isr_riscv_extirq; any other trap parks in _trap (a bug). */
+    la t0, _trap_dispatch
     csrw mtvec, t0
 
     /* Enable the cycle/instret counters: Hazard3 resets mcountinhibit
@@ -57,10 +58,88 @@ _hang:
     wfi
     j _hang
 
-/* trap handler: no OS here, so any exception/interrupt just halts */
+/* trap handler: no OS here, so any non-IRQ trap just halts */
 .align 2
 _trap:
     j _trap
+
+/* --- machine trap dispatcher (Xh3irq, hazard3 custom_extensions) ----
+ * mcause 0x8000000B (machine external IRQ): loop h3.meinext (0xbe4 —
+ * value is irq<<2, MSB set when none pending+enabled) and call the
+ * application's isr_riscv_extirq(irq) for each. IRQs are level-
+ * sensitive: the ISR must ack its peripheral or the loop re-enters.
+ * Anything else lands in _trap. Non-preemptive (meicontext untouched).
+ */
+.balign 4
+_trap_dispatch:
+    addi sp, sp, -64
+    sw   ra, 0(sp)
+    sw   t0, 4(sp)
+    sw   t1, 8(sp)
+    sw   t2, 12(sp)
+    sw   a0, 16(sp)
+    sw   a1, 20(sp)
+    sw   a2, 24(sp)
+    sw   a3, 28(sp)
+    sw   a4, 32(sp)
+    sw   a5, 36(sp)
+    sw   a6, 40(sp)
+    sw   a7, 44(sp)
+    sw   t3, 48(sp)
+    sw   t4, 52(sp)
+    sw   t5, 56(sp)
+    sw   t6, 60(sp)
+    csrr t0, mcause
+    li   t1, 0x8000000B
+    bne  t0, t1, 3f
+1:  csrr a0, 0xbe4           /* h3.meinext */
+    bltz a0, 2f              /* MSB: nothing pending+enabled */
+    srli a0, a0, 2
+    call isr_riscv_extirq
+    j    1b
+2:  lw   ra, 0(sp)
+    lw   t0, 4(sp)
+    lw   t1, 8(sp)
+    lw   t2, 12(sp)
+    lw   a0, 16(sp)
+    lw   a1, 20(sp)
+    lw   a2, 24(sp)
+    lw   a3, 28(sp)
+    lw   a4, 32(sp)
+    lw   a5, 36(sp)
+    lw   a6, 40(sp)
+    lw   a7, 44(sp)
+    lw   t3, 48(sp)
+    lw   t4, 52(sp)
+    lw   t5, 56(sp)
+    lw   t6, 60(sp)
+    addi sp, sp, 64
+    mret
+3:  j _trap                  /* fatal trap: park */
+
+.weak isr_riscv_extirq
+isr_riscv_extirq:
+    ret
+
+/* Xh3irq helpers (CSRs need asm; Mojo calls these via pico.xh3irq).
+ * meiea (0xbe0) is windowed: [4:0] select a 16-IRQ window, [31:16]
+ * are that window's bits; csrs sets without clobbering others. */
+.global h3_irq_enable        /* a0 = external IRQ number */
+h3_irq_enable:
+    andi t0, a0, 15
+    li   t1, 0x10000
+    sll  t1, t1, t0
+    srli t0, a0, 4
+    or   t0, t0, t1
+    csrs 0xbe0, t0
+    ret
+
+.global h3_irq_global_enable
+h3_irq_global_enable:
+    li   t0, 0x800
+    csrs mie, t0             /* mie.meie */
+    csrsi mstatus, 8         /* mstatus.mie */
+    ret
 
 /* --- bootrom helpers (RP2350 datasheet §5.4; boot/bootrom_constants.h) ---
  * rom_reboot_bootsel(delay_ms): look up ROM_FUNC_REBOOT ('R'|'B'<<8 =

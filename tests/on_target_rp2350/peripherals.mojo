@@ -14,6 +14,7 @@ Mailbox ("PER1", 5 pairs):
   2 (die temp milli-°C, raw ADC)        host: 5000..60000 m°C
   3 (uart loopback ok, echoed bytes)    host: (1, 0xA53C)
   4 (mcycle delta of sleep_us(10_000))  host: 120_000 ±2%
+  5 (irq fired, isr call count)         host: (1, 1) — Xh3irq dispatch
 """
 
 from std.ffi import external_call
@@ -21,12 +22,14 @@ from std.ffi import external_call
 from pico.mmio import read32, write32
 from pico.pico2 import Pin, Pwm, init, init_timer, sleep_us, time_us
 from pico.chips import RP2350
+from pico.time import alarm0_ack, alarm0_arm
 import pico.adc as adc
 import pico.uart as uart
+import pico.xh3irq as xh3irq
 
 comptime MB: UInt32 = 0x2003_0000
 comptime MAGIC: UInt32 = 0x31524550  # "PER1"
-comptime COUNT: UInt32 = 5
+comptime COUNT: UInt32 = 6
 comptime MB_FLASH_OFF: UInt32 = 0x003F_F000
 
 
@@ -79,6 +82,28 @@ def t_uart() -> Tuple[UInt32, UInt32]:
     return (ok, got)
 
 
+comptime IRQ_COUNTER: UInt32 = 0x2002_4000  # scratch, outside mailbox
+
+
+@export("isr_riscv_extirq")
+def isr(irq: UInt32) abi("C"):
+    # level-sensitive: ack the TIMER first, then count the visit
+    alarm0_ack[RP2350]()
+    write32(IRQ_COUNTER, read32(IRQ_COUNTER) + 1)
+
+
+def t_irq() -> Tuple[UInt32, UInt32]:
+    write32(IRQ_COUNTER, 0)  # RAM survives soft resets: clear first
+    xh3irq.enable(0)  # TIMER0_IRQ_0 (intctrl.h)
+    xh3irq.global_enable()
+    alarm0_arm[RP2350](1000)
+    var t0 = time_us()
+    while read32(IRQ_COUNTER) == 0 and time_us() - t0 < 100_000:
+        pass
+    var n = read32(IRQ_COUNTER)
+    return (1 if n > 0 else 0, n)
+
+
 def t_sleep() -> Tuple[UInt32, UInt32]:
     var c0 = _cyc()
     sleep_us(10_000)
@@ -106,6 +131,7 @@ def start() abi("C"):
     _report(2, t_adc())
     _report(3, t_uart())
     _report(4, t_sleep())
+    _report(5, t_irq())
 
     write32(MB + 0x04, 2)  # done
     external_call["flash_commit_reboot", NoneType](

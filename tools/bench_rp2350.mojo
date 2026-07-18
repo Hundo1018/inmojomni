@@ -102,7 +102,12 @@ def _libgcc() raises -> String:
 
 
 def _shared_objs() raises:
-    var cc = String("clang --target=riscv32-unknown-none-elf ") + MARCH + " -c "
+    # -mno-relax: linker relaxation breaks hand-alignment in crt0_rv32.S
+    # (mtvec target must stay 4-aligned — low bits are the MODE field)
+    var cc = (
+        String("clang --target=riscv32-unknown-none-elf ")
+        + MARCH + " -mno-relax -c "
+    )
     _ = buildmod.sh(cc + "runtime/crt0_rv32.S -o build/crt0_rv32.o")
     _ = buildmod.sh(cc + "runtime/rp2350_image_def.S -o build/rp2350_image_def.o")
 

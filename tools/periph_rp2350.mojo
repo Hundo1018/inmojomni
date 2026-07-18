@@ -11,6 +11,7 @@ Hard gates:
   - die temperature between 5°C and 60°C
   - UART internal loopback echoes 0xA5 then 0x3C
   - sleep_us(10_000) costs 120_000 mcycles ±2%
+  - a TIMER0 alarm interrupt is dispatched through Xh3irq exactly once
 
 Usage: pixi run periph-rp2350   (Pico 2 in BOOTSEL)
 """
@@ -20,7 +21,7 @@ from std.time import sleep
 import bench_rp2350 as b2
 import build as buildmod
 
-comptime COUNT = 5
+comptime COUNT = 6
 comptime MAGIC: UInt32 = 0x31524550  # "PER1"
 comptime HDR = 5
 
@@ -112,6 +113,8 @@ def main() raises:
     var uart_ok = flat[6]
     var uart_got = flat[7]
     var sleep_cyc = flat[8]
+    var irq_fired = flat[10]
+    var irq_count = flat[11]
 
     # cycles per µs, in hundredths (expect 1200 = 12.00)
     var centi = UInt64(t_cyc) * 100 / UInt64(t_us)
@@ -147,5 +150,11 @@ def main() raises:
         raise Error("UART loopback failed")
     if sleep_cyc < 117_600 or sleep_cyc > 122_400:
         raise Error("sleep_us accuracy outside ±2%")
+    print(
+        "irq: fired=" + String(Int(irq_fired)) + " isr_calls="
+        + String(Int(irq_count))
+    )
+    if irq_fired != 1 or irq_count != 1:
+        raise Error("Xh3irq timer interrupt did not fire exactly once")
     print()
-    print("gates: TIMER rate, PWM, ADC temp, UART loopback, sleep accuracy verified")
+    print("gates: TIMER rate, PWM, ADC temp, UART loopback, sleep accuracy, Xh3irq interrupt verified")

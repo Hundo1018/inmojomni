@@ -52,7 +52,7 @@ def init():
     # "SEGGER RTT\0\0\0\0\0\0" as little-endian words
     write32(RTT_BASE + 12, 0)
     write32(RTT_BASE + 8, 0x0000_5454)  # "TT\0\0"
-    write32(RTT_BASE + 4, 0x5220_4552)  # "ER R"
+    write32(RTT_BASE + 4, 0x5220_5245)  # "ER R" (little-endian: 45 52 20 52)
     write32(RTT_BASE + 0, 0x4747_4553)  # "SEGG"
 
 
