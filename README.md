@@ -556,15 +556,15 @@ and languages, cross-run spread under 2%.
 
 | Workload | Mojo | C (gcc) | C (clang) | Rust | Mojo / clang |
 |---|---:|---:|---:|---:|---:|
-| 100k GPIO toggles (volatile) | 300,013 | 300,013 | 300,011 | 300,012 | 1.00 |
-| 200k xorshift32 rounds | 1,600,014 | 1,600,013 | 1,600,013 | 1,600,014 | 1.00 |
-| 50k u32 divisions (hardware M) | 1,250,016 | 1,200,016 | 1,250,010 | 1,250,016 | 1.00 |
-| 20k float32 mul-adds (soft-float) | 6,128,786 | 5,968,394 | 5,928,380 | 2,876,368 | 1.03 |
-| 100k noinline function calls | 900,011 | 900,010 | 800,008 | 900,011 | 1.13 |
-| CRC-32 over 4 KB ×4 (bitwise) | 1,187,884 | 1,110,053 | 630,846 | 626,741 | 1.88 |
-| quicksort 512 u32 ×20 | 1,885,255 | 1,153,999 | 1,387,042 | 1,380,228 | 1.36 |
-| 16×16 u32 matmul ×50 (hardware M) | 1,853,061 | 1,593,616 | 880,065 | 874,409 | 2.11 |
-| recursive fib(24) | 1,961,602 | 1,372,190 | 1,886,573 | 2,018,912 | 1.04 |
+| 100k GPIO toggles (volatile) | 300,013 | 300,013 | 300,010 | 300,012 | 1.00 |
+| 200k xorshift32 rounds | 1,600,013 | 1,600,013 | 1,600,011 | 1,600,013 | 1.00 |
+| 50k u32 divisions (hardware M) | 1,250,015 | 1,200,016 | 1,200,010 | 1,250,015 | 1.04 |
+| 20k float32 mul-adds (soft-float) | 6,048,388 | 6,048,793 | 6,008,887 | 3,074,906 | 1.01 |
+| 100k noinline function calls | 900,008 | 900,010 | 700,010 | 900,008 | 1.29 |
+| CRC-32 over 4 KB ×4 (bitwise) | 1,183,791 | 1,110,053 | 630,848 | 626,743 | 1.88 |
+| quicksort 512 u32 ×20 | 1,884,996 | 1,153,999 | 1,378,540 | 1,398,145 | 1.37 |
+| 16×16 u32 matmul ×50 (hardware M) | 1,840,260 | 1,593,616 | 880,814 | 874,408 | 2.09 |
+| recursive fib(24) | 1,932,944 | 1,372,190 | 1,915,229 | 1,932,942 | 1.01 |
 
 *(cycles; lower is better)*
 
@@ -572,18 +572,18 @@ The Hazard3 is cycle-deterministic: runs 2 and 3 agree **to the cycle** in
 every implementation (run 1 differs only by cold XIP cache; medians absorb
 it). On straight-line code Mojo again matches same-backend C to within
 rounding. On the nested-loop kernels this path is slower than clang C —
-1.88× on CRC-32 and 2.11× on matmul — a larger gap than the same workloads
+1.88× on CRC-32 and 2.09× on matmul — a larger gap than the same workloads
 show on the RP2040/Arm path, and an open item worth investigating rather
 than a rounding artifact. The Rust soft-float row again compares runtime
 libraries, not languages (its compiler-builtins beat libgcc's soft-float
 roughly 2×). Mojo produces the smallest firmware of the four
-(`.text` 3,790 B vs 4,184–13,658 B). Reproduce: `pixi run bench-rp2350`
+(`.text` 4,196 B vs 4,590–14,064 B). Reproduce: `pixi run bench-rp2350`
 (Pico 2 in BOOTSEL; `clang`, riscv-gcc, and `rustc` with the
 `riscv32imac-unknown-none-elf` target).
 
 Language-feature measurements on the same silicon (traits are zero-cost;
 the struct-passing register boundary is 8 bytes; a comptime lookup table in
-XIP flash loses to recomputation by 2.5×) live in
+XIP flash loses to recomputation by ~2.2×) live in
 [docs/BENCHMARKS.md](docs/BENCHMARKS.md); reproduce with
 `pixi run features-rp2350`.
 
