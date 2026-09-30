@@ -3,6 +3,38 @@
 > 對外的現況描述放 README「Current limitations」;這裡是計畫與野心,
 > 順序代表目前想做的優先序,隨時可調。
 
+## 未竟事項(2026-09-30 盤點)
+
+實測依據:本機 host tier(無探針)。硬體項目未重跑。
+
+1. **Nightly 落後 2.5 個月,且 canary 失明。** pixi.toml 釘 `==dev2026071006`,
+   CI `nightly-latest` 的 `pixi update` 只會解析回同一版(09-29 run log:
+   `mojo-compiler 1.0.0b3.dev2026071006`),所以每天綠燈但沒有測到新版。
+   最新 1.2.0.dev2026092905 實測:
+   - riscv32 `--emit=object` 已恢復(釘死版本的原因可能已消失;何時恢復未二分)。
+   - host tier 原樣 FAIL,需 4 處修改後全綠(改動在 scratch,未提交):
+     `InlineArray`→`Array`;`Asm` 去掉 `ImplicitlyCopyable` + `materialize[]`;
+     `x = String(x[byte=…])` 經暫存變數;retarget 去除 GEP `nuw`/`nusw`。
+   - 第 5 處需要決策:預設 bounds check 讓 `test_on_target` 連到
+     `__aeabi_memcpy`(RP2040 crt0 沒提供)。選項:(a) `-D ASSERT=none`
+     (已驗證全綠);(b) crt0.S 補 `__aeabi_memcpy`/memset,保留檢查,
+     但失敗路徑用 2 KB stack buffer;(c) 兩者並存,debug build 保留檢查。
+   - 對照:blink `firmware.elf` 與 RP2350 `main_rp2350.elf` 在新舊版
+     md5 完全相同(780 B / 1040 B);`test_on_target.elf` 23,691 → 15,936 B
+     (舊版加 ASSERT=none 仍是 23,691,差異來自編譯器/stdlib)。
+   - 升版後需要實機重跑:`pixi run test`(RP2040)+ 全部 `*-rp2350` gate,
+     benchmark 數字要重量。
+2. **Canary 修正**:`nightly-latest` 要先把 pins 改成最新版再 `pixi update`,
+   否則 README「breakage surfaces within a day」這句沒有 gate。
+3. **CI 沒有建 RP2350 路徑**:只跑 RP2040 `test-host`。RP2350 blink
+   build + 大小檢查可在 CI 做(需 clang/ld.lld,不需硬體)。
+4. **README 不一致**:「Current limitations」說 RP2350 的 PWM/ADC/UART/
+   RTT/中斷只在 RP2040 實機驗證過,但 96a0975、8013758 已在 RP2350 實機
+   gate(`periph-rp2350`、`rtt-rp2350`),能力矩陣也標 ✅。
+5. RP2040 四語言 benchmark 在 dev2026071006 上未重跑(07-18 時探針接 Pico 2)。
+6. GitHub Actions 警告:checkout@v4 / setup-pixi@v0.8.1 用 Node 20(已強制跑 Node 24)。
+7. 仍等材料:I²C/SPI、邏輯分析儀自動化、WS2812/SSD1306/MPU6050 驅動。
+
 ## 近期
 
 - [x] `print()`/log over **RTT** —— 2026-07-04 完成(`pico.rtt`,SEGGER 相容
@@ -33,8 +65,12 @@
 
 ## 中期
 
-- [ ] **RP2350 / Pico 2(RISC-V)原生編譯**——免 retarget,Mojo 直出;
-      多晶片參數化架構已設計並有可編譯原型:[MULTICHIP.md](MULTICHIP.md)
+- [x] **RP2350 / Pico 2(RISC-V)原生編譯**——2026-07-18 完成:免 retarget,
+      Mojo 直出;GPIO/PIO(含 PIO2)/雙核/TIMER/PWM/ADC/UART/Xh3irq/RTT/
+      除錯全部實機 gate。架構:[MULTICHIP.md](MULTICHIP.md)
+- [ ] riscv32 後端在 Mojo 是非官方 tier:dev2026071105 起被 backend
+      allowlist 關掉,1.2.0.dev2026092905 實測恢復。沒有上游承諾,任何
+      nightly 都可能再關——這是整個專案的單點依賴(README limitations 連到這裡)
 - [ ] DMA、USB device(CDC serial → `print()` 到 USB)
 - [ ] `inmojomni new` 專案模板:三行指令從零到第一次 blink
 - [ ] WS2812 / SSD1306 / MPU6050 驅動(Mojo trait 風格 driver 生態的種子)
@@ -50,7 +86,7 @@
 
 | 優先 | 材料 | 驗證什麼 |
 |---|---|---|
-| ★★★ | **Raspberry Pi Pico 2(RP2350)** | Mojo **原生 RISC-V** MCU——本專案最重要的下一步 |
+| ✓ 已購 | Raspberry Pi Pico 2(RP2350) | 已完成原生 RISC-V 支援 |
 | ★★★ | **8ch 24 MHz 邏輯分析儀**(fx2lafw 相容,~$10)| PIO 波形、PWM/I²C/SPI 時序的自動化驗證(sigrok-cli 可進 CI) |
 | ★★☆ | 第二片 Pico(1 代)| MicroPython 第一手 benchmark;USB 功能開發時保留一片跑測試 |
 | ★★☆ | WS2812 燈條(8–16 顆)| PIO 的殺手級 demo(800 kHz 精準時序) |
