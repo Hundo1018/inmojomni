@@ -33,6 +33,7 @@ def build_features() raises -> String:
     b2._shared_objs()
     _ = buildmod.shx(
         prefix + "/bin/mojo build --emit=object"
+        + buildmod.MOJO_FIRMWARE_FLAGS
         + " --target-triple=riscv32-unknown-none-elf"
         + " --target-features=+m,+a,+c"
         + " -I " + prefix + "/lib/mojo -I src"

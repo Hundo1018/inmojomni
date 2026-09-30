@@ -168,9 +168,10 @@ def test_comptime_assembly() raises:
     comptime CT = _sideset_prog()
     comptime assert CT.len == 4, "comptime length"
     comptime assert CT.unresolved() == 0, "comptime fixups resolved"
+    var ct = materialize[CT]()
     var rt = _sideset_prog()
     for i in range(32):
-        _assert_eq(CT.code[i], rt.code[i], "comptime == runtime encoding")
+        _assert_eq(ct.code[i], rt.code[i], "comptime == runtime encoding")
     _ok("comptime assembly matches runtime, comptime-assertable")
 
 

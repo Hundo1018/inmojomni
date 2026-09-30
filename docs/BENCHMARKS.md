@@ -3,6 +3,13 @@
 Only numbers we actually measured are reported, with the full measurement
 conditions stated. Anything we did not measure is explicitly marked as such.
 
+> **Toolchain note (2026-09-30).** The pinned toolchain moved to Mojo 1.1.0
+> (stable) with host LLVM/clang 23.1.2, and firmware now builds with
+> `-D ASSERT=none`. Every section below states the toolchain it was measured
+> on; none has been re-measured on the new pins yet. For the RP2040 blink the
+> new toolchain changes 4 instruction pairs (`ands`+`cmp` → `mvns`+`tst`),
+> with the same size (780 B).
+
 ## Methodology
 
 - One Raspberry Pi Pico (RP2040 at 12 MHz XOSC, no PLL) for all runs.

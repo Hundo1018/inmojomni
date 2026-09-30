@@ -3,37 +3,53 @@
 > 對外的現況描述放 README「Current limitations」;這裡是計畫與野心,
 > 順序代表目前想做的優先序,隨時可調。
 
-## 未竟事項(2026-09-30 盤點)
+## 未竟事項(2026-09-30 更新)
 
-實測依據:本機 host tier(無探針)。硬體項目未重跑。
+### 已完成(本輪,host tier 驗證;硬體未重跑)
 
-1. **Nightly 落後 2.5 個月,且 canary 失明。** pixi.toml 釘 `==dev2026071006`,
-   CI `nightly-latest` 的 `pixi update` 只會解析回同一版(09-29 run log:
-   `mojo-compiler 1.0.0b3.dev2026071006`),所以每天綠燈但沒有測到新版。
-   最新 1.2.0.dev2026092905 實測:
-   - riscv32 `--emit=object` 已恢復(釘死版本的原因可能已消失;何時恢復未二分)。
-   - host tier 原樣 FAIL,需 4 處修改後全綠(改動在 scratch,未提交):
-     `InlineArray`→`Array`;`Asm` 去掉 `ImplicitlyCopyable` + `materialize[]`;
-     `x = String(x[byte=…])` 經暫存變數;retarget 去除 GEP `nuw`/`nusw`。
-   - 第 5 處需要決策:預設 bounds check 讓 `test_on_target` 連到
-     `__aeabi_memcpy`(RP2040 crt0 沒提供)。選項:(a) `-D ASSERT=none`
-     (已驗證全綠);(b) crt0.S 補 `__aeabi_memcpy`/memset,保留檢查,
-     但失敗路徑用 2 KB stack buffer;(c) 兩者並存,debug build 保留檢查。
-   - 對照:blink `firmware.elf` 與 RP2350 `main_rp2350.elf` 在新舊版
-     md5 完全相同(780 B / 1040 B);`test_on_target.elf` 23,691 → 15,936 B
-     (舊版加 ASSERT=none 仍是 23,691,差異來自編譯器/stdlib)。
-   - 升版後需要實機重跑:`pixi run test`(RP2040)+ 全部 `*-rp2350` gate,
-     benchmark 數字要重量。
-2. **Canary 修正**:`nightly-latest` 要先把 pins 改成最新版再 `pixi update`,
-   否則 README「breakage surfaces within a day」這句沒有 gate。
-3. **CI 沒有建 RP2350 路徑**:只跑 RP2040 `test-host`。RP2350 blink
-   build + 大小檢查可在 CI 做(需 clang/ld.lld,不需硬體)。
-4. **README 不一致**:「Current limitations」說 RP2350 的 PWM/ADC/UART/
-   RTT/中斷只在 RP2040 實機驗證過,但 96a0975、8013758 已在 RP2350 實機
-   gate(`periph-rp2350`、`rtt-rp2350`),能力矩陣也標 ✅。
-5. RP2040 四語言 benchmark 在 dev2026071006 上未重跑(07-18 時探針接 Pico 2)。
-6. GitHub Actions 警告:checkout@v4 / setup-pixi@v0.8.1 用 Node 20(已強制跑 Node 24)。
-7. 仍等材料:I²C/SPI、邏輯分析儀自動化、WS2812/SSD1306/MPU6050 驅動。
+- 改追最新**穩定版** Mojo 1.1.0(使用者決策),pins 仍為 `==`;
+  CI `nightly-latest` 改為 `stable-latest`:先放寬 Mojo pins 再
+  `pixi update`,真的會測到新版(本機模擬解析到 1.1.0)。
+- bounds check:選 (a) `-D ASSERT=none`,集中在 `MOJO_FIRMWARE_FLAGS`。
+- 主機 LLVM 改由 pixi 釘 conda-forge 23.1.2(opt/llc/clang/ld.lld)。
+  retarget 從 15 條規則減為 4 條(triple、datalayout、target-cpu、
+  target-features 改寫);11 條「LLVM 版本落差」降級規則全部刪除。
+  新增 `opt -force-attribute=nounwind`(裸機不會 unwind;否則 llc 產生
+  EHABI 表,連進 libgcc unwinder)。
+- 對照:RP2040 blink 780 B → 780 B,反組譯差 4 組指令
+  (`ands`+`cmp` → `mvns`+`tst`,語意相同);volatile 數 15/371/80 不變;
+  RP2350 blink 的 flash 映像(objcopy binary)md5 完全相同。
+- CI 加 RP2350 build。README limitations 已更正。
+
+### 待辦
+
+1. **接探針重跑全部硬體 gate**:`pixi run test`、`bench`、所有
+   `*-rp2350`;重量 benchmark 並更新 BENCHMARKS(目前各節仍是舊工具鏈數字,
+   已標註)。`pixi run sizes` 也要重跑(需 rustc thumbv6m target)。
+2. **刪掉 retarget 的根本解:讓 Mojo 帶 ARM 後端。** 編譯器已開源
+   (2026-08-18,Apache-2.0 w/ LLVM exceptions;1.1 起收外部貢獻)。
+   調查結果(modular/modular @98ef37b):
+   - `bazel/public-patches/llvm_project.bzl`:`BACKENDS = ["AArch64",
+     "RISCV", "X86"]`,另有 `llvm_configure.configure(extra_targets=[...])`。
+   - `Mojo/lib/Target/Host/HostTraits.h` 的 `isSupported` 已接受
+     `triple.isARM()`,註解說「covers the CPU targets the shipped build
+     carries an LLVM backend for」——與 BACKENDS 不一致。
+   - 實測 1.1.0:`--target-triple=thumbv6m-none-eabi` 等全部報
+     「No available targets are compatible」(LLVM registry 沒有 ARM),
+     不是 Mojo allowlist 擋的。
+   - 做法:(a) 向上游提 issue/PR,把 "ARM" 加進 BACKENDS(一行,理由是
+     HostTraits 已宣稱支援 isARM);上游接受後,RP2040 路徑可用
+     `mojo build --target-triple=armv6m-none-eabi --target-cpu=cortex-m0plus
+     --emit=object`,retarget.mojo、opt/llc、主機 LLVM 釘版全部可刪。
+     (b) 等上游期間,可在自己機器用 `extra_targets = ["ARM"]` 自建編譯器
+     驗證;雲端 session 不行:Bazel 從 github.com 下載 archive 被 egress
+     政策擋(403),BuildBuddy remote downloader 回 UNAUTHENTICATED。
+   - 未驗證:Mojo 的 ARM32 lowering(ABI、Int 寬度、soft-float 呼叫)是否
+     直接可用;自建後第一個 gate 就是 test-host + 硬體 `pixi run test`。
+3. riscv32 仍無上游承諾(stable 1.0.0 就關過)。`stable-latest` 會在
+   新穩定版出現當天變紅。
+4. GitHub Actions Node 20 棄用警告(checkout@v4、setup-pixi@v0.8.1)。
+5. 仍等材料:I²C/SPI、邏輯分析儀自動化、WS2812/SSD1306/MPU6050 驅動。
 
 ## 近期
 
@@ -68,9 +84,9 @@
 - [x] **RP2350 / Pico 2(RISC-V)原生編譯**——2026-07-18 完成:免 retarget,
       Mojo 直出;GPIO/PIO(含 PIO2)/雙核/TIMER/PWM/ADC/UART/Xh3irq/RTT/
       除錯全部實機 gate。架構:[MULTICHIP.md](MULTICHIP.md)
-- [ ] riscv32 後端在 Mojo 是非官方 tier:dev2026071105 起被 backend
-      allowlist 關掉,1.2.0.dev2026092905 實測恢復。沒有上游承諾,任何
-      nightly 都可能再關——這是整個專案的單點依賴(README limitations 連到這裡)
+- [ ] riscv32 後端沒有上游支援承諾:dev2026071105 與 stable 1.0.0 都關過,
+      1.1.0 release notes 列為 bug 修復。這是兩條路徑的單點依賴
+      (README limitations 連到這裡)
 - [ ] DMA、USB device(CDC serial → `print()` 到 USB)
 - [ ] `inmojomni new` 專案模板:三行指令從零到第一次 blink
 - [ ] WS2812 / SSD1306 / MPU6050 驅動(Mojo trait 風格 driver 生態的種子)

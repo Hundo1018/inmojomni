@@ -2,7 +2,7 @@
 """inmojomni test orchestrator: `pixi run test`.
 
 Stages (later stages assume earlier ones passed):
-  1. host-unit       IR downgrade pass + boot2 CRC (tests/host, Mojo)
+  1. host-unit       IR retarget pass + boot2 CRC (tests/host, Mojo)
   2. compile-fail    invalid Mojo (e.g. Pin[30]) must NOT compile
   3. build+static    build blink & on-target suite (tools/build.mojo),
                      verify ELFs (tools/check_elf.mojo), volatile ops

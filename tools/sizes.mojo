@@ -43,7 +43,7 @@ def main() raises:
 
     print("building blink (clang -O2)...")
     _ = buildmod.sh(
-        "clang --target=armv6m-none-eabi -mcpu=cortex-m0plus -O2"
+        buildmod.CLANG + " --target=armv6m-none-eabi -mcpu=cortex-m0plus -O2"
         + " -ffreestanding -fshort-enums -ffunction-sections"
         + " -fdata-sections -c bench/blink.c -o build/blink_clang.o"
     )

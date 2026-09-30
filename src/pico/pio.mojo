@@ -53,10 +53,10 @@ comptime _PINCTRL: UInt32 = 0x14
 comptime _MAX_FUTURES = 8
 
 
-struct Asm(Copyable, ImplicitlyCopyable, Movable):
+struct Asm(Copyable, Movable):
     """A PIO program under construction (max 32 instructions)."""
 
-    var code: InlineArray[UInt16, 32]
+    var code: Array[UInt16, 32]
     var len: Int
     # side-set configuration (applies to the whole program)
     var side_count: Int
@@ -64,20 +64,20 @@ struct Asm(Copyable, ImplicitlyCopyable, Movable):
     var side_pindirs: Bool
     # forward labels: handle -> bound address (-1 = unbound), and the
     # per-instruction fixup table (value = handle index + 1)
-    var _fw_addr: InlineArray[Int, _MAX_FUTURES]
+    var _fw_addr: Array[Int, _MAX_FUTURES]
     var _fw_used: Int
-    var _fixup: InlineArray[Int, 32]
+    var _fixup: Array[Int, 32]
     var _pending: Int
 
     def __init__(out self):
-        self.code = InlineArray[UInt16, 32](fill=0)
+        self.code = Array[UInt16, 32](fill=0)
         self.len = 0
         self.side_count = 0
         self.side_opt = False
         self.side_pindirs = False
-        self._fw_addr = InlineArray[Int, _MAX_FUTURES](fill=-1)
+        self._fw_addr = Array[Int, _MAX_FUTURES](fill=-1)
         self._fw_used = 0
-        self._fixup = InlineArray[Int, 32](fill=0)
+        self._fixup = Array[Int, 32](fill=0)
         self._pending = 0
 
     def side_set(mut self, count: Int, optional: Bool = False,

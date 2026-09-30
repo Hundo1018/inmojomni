@@ -56,7 +56,8 @@ def _hex(h: String) raises -> UInt32:
     var v: UInt32 = 0
     var body = h
     if body.startswith("0x"):
-        body = String(body[byte=2:])
+        var trimmed_body = String(body[byte=2:])
+        body = trimmed_body^
     for b in body.codepoints():
         var d = Int(b.to_u32())
         if 48 <= d and d <= 57:

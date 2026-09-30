@@ -46,8 +46,8 @@ def _cyc() -> UInt32:
 
 
 @always_inline
-def _ram(addr: UInt32) -> UnsafePointer[UInt32, MutUntrackedOrigin]:
-    return UnsafePointer[UInt32, MutUntrackedOrigin](
+def _ram(addr: UInt32) -> Pointer[UInt32, MutUntrackedOrigin]:
+    return Pointer[UInt32, MutUntrackedOrigin](
         unsafe_from_address=Int(addr)
     )
 
@@ -121,13 +121,13 @@ def bm_crc32() -> Tuple[UInt32, UInt32]:
     var x: UInt32 = 0x12345678
     for i in range(1024):
         x = _step(x)
-        buf.store(i, x)
+        buf.unsafe_store(i, x)
     var acc: UInt32 = 0
     var t0 = _cyc()
     for k in range(4):
         var crc = UInt32(0xFFFFFFFF) ^ UInt32(k)
         for i in range(1024):
-            var w = buf.load(i)
+            var w = buf.unsafe_load(i)
             for b in range(4):
                 crc ^= (w >> UInt32(8 * b)) & 0xFF
                 for _ in range(8):
@@ -140,21 +140,21 @@ def bm_crc32() -> Tuple[UInt32, UInt32]:
 
 
 def _qsort(
-    a: UnsafePointer[UInt32, MutUntrackedOrigin], lo: Int32, hi: Int32
+    a: Pointer[UInt32, MutUntrackedOrigin], lo: Int32, hi: Int32
 ):
     if lo >= hi:
         return
-    var p = a.load(Int(hi))
+    var p = a.unsafe_load(Int(hi))
     var i = lo
     for j in range(Int(lo), Int(hi)):
-        if a.load(j) < p:
-            var t = a.load(Int(i))
-            a.store(Int(i), a.load(j))
-            a.store(j, t)
+        if a.unsafe_load(j) < p:
+            var t = a.unsafe_load(Int(i))
+            a.unsafe_store(Int(i), a.unsafe_load(j))
+            a.unsafe_store(j, t)
             i += 1
-    var t = a.load(Int(i))
-    a.store(Int(i), a.load(Int(hi)))
-    a.store(Int(hi), t)
+    var t = a.unsafe_load(Int(i))
+    a.unsafe_store(Int(i), a.unsafe_load(Int(hi)))
+    a.unsafe_store(Int(hi), t)
     _qsort(a, lo, i - 1)
     _qsort(a, i + 1, hi)
 
@@ -167,9 +167,9 @@ def bm_sort() -> Tuple[UInt32, UInt32]:
         var x = UInt32(0x00C0FFEE) + UInt32(rep)
         for i in range(512):
             x = _step(x)
-            a.store(i, x)
+            a.unsafe_store(i, x)
         _qsort(a, 0, 511)
-        acc += a.load(0) ^ a.load(255) ^ a.load(511)
+        acc += a.unsafe_load(0) ^ a.unsafe_load(255) ^ a.unsafe_load(511)
     var dt = _cyc() - t0
     return (dt, acc)
 
@@ -181,10 +181,10 @@ def bm_mat16() -> Tuple[UInt32, UInt32]:
     var x: UInt32 = 0x600D5EED
     for i in range(256):
         x = _step(x)
-        ma.store(i, x)
+        ma.unsafe_store(i, x)
     for i in range(256):
         x = _step(x)
-        mb.store(i, x)
+        mb.unsafe_store(i, x)
     var acc: UInt32 = 0
     var t0 = _cyc()
     for rep in range(50):
@@ -192,10 +192,10 @@ def bm_mat16() -> Tuple[UInt32, UInt32]:
             for j in range(16):
                 var s: UInt32 = 0
                 for k in range(16):
-                    s += ma.load(i * 16 + k) * mb.load(k * 16 + j)
-                mc.store(i * 16 + j, s)
-        ma.store(rep, ma.load(rep) ^ mc.load(rep))
-        acc ^= mc.load(0) + mc.load(255)
+                    s += ma.unsafe_load(i * 16 + k) * mb.unsafe_load(k * 16 + j)
+                mc.unsafe_store(i * 16 + j, s)
+        ma.unsafe_store(rep, ma.unsafe_load(rep) ^ mc.unsafe_load(rep))
+        acc ^= mc.unsafe_load(0) + mc.unsafe_load(255)
     var dt = _cyc() - t0
     return (dt, acc)
 

@@ -472,7 +472,7 @@ def test_pio_comptime() -> Bool:
     var pin = Pin[17]()
     pin.set_function(Function.PIO0)
     var sm = StateMachine[0, 3]()
-    sm.load(PROG)
+    sm.load(materialize[PROG]())
     sm.set_sideset_pins(17)
     sm.set_set_pins(17, 1)
     sm.exec(0xE081)  # set pindirs, 1

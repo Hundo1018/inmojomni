@@ -5,7 +5,8 @@ Mojo's bundled LLVM has no 32-bit ARM backend, so the pipeline is:
   1. mojo build --emit=llvm  targeting riscv32 (same ILP32, little-endian
      data model as ARMv6-M, so the generated IR is layout-compatible)
   2. retarget the IR module to thumbv6m-none-eabi (see retarget.mojo)
-  3. opt -O2 + llc compile the IR for cortex-m0plus
+  3. opt -O2 (+ nounwind) + llc, both the LLVM pinned in pixi.toml, compile
+     the IR for cortex-m0plus
   4. arm-none-eabi-gcc links it with crt0.S + link.ld (+ boot2)
 
 The driver itself is a Mojo program; run it from the repo root:
@@ -22,6 +23,15 @@ from std.subprocess import run
 from std.sys import argv
 
 from retarget import CPU, DATALAYOUT_MCU, TRIPLE_IR, TRIPLE_MCU, retarget_text
+
+# Flags every firmware `mojo build` gets. ASSERT=none: Mojo >=1.0 bounds-
+# checks by default, and a failing check formats its message through a
+# 2 KB stack buffer + memcpy -- neither fits a bare-metal image (RP2040
+# crt0 has no memcpy at all). Firmware is verified by on-target gates.
+comptime MOJO_FIRMWARE_FLAGS = " -D ASSERT=none"
+# clang from pixi.toml's `clang-23` package (the plain `clang` package pulls
+# a conda sysroot that breaks `mojo build` of host executables).
+comptime CLANG = "clang-23"
 from boot2 import build_boot2
 
 
@@ -45,7 +55,8 @@ def sh(cmd: String) raises -> String:
     var rc = String(out[byte = idx + 4 : out.byte_length()])
     var body = String(out[byte=0:idx])
     if body.endswith("\n"):
-        body = String(body[byte = 0 : body.byte_length() - 1])
+        var trimmed_body = String(body[byte = 0 : body.byte_length() - 1])
+        body = trimmed_body^
     if len(body.as_bytes()) > 0:
         print(body)
     if rc != "0":
@@ -70,7 +81,7 @@ def toolchain_prefix() -> String:
 
 def emit_ir(main_mojo: String, out_ll: String, debug: Bool) raises:
     var prefix = toolchain_prefix()
-    var cmd = String(prefix) + "/bin/mojo build"
+    var cmd = String(prefix) + "/bin/mojo build" + MOJO_FIRMWARE_FLAGS
     if debug:
         # Full debug info. The newer-LLVM #dbg_ records this produces
         # are translated back to intrinsics by retarget_text(). Elaborator
@@ -129,15 +140,23 @@ def build(main_mojo: String, name: String, debug: Bool) raises -> String:
         String(" -mtriple=") + TRIPLE_MCU + " -mcpu=" + CPU
         + " -function-sections -data-sections -filetype=obj "
     )
+    # Bare-metal Mojo never unwinds (no personality routine, `raises` is a
+    # return value). Without nounwind, llc emits EHABI index entries that
+    # reference __aeabi_unwind_cpp_pr0 and drag libgcc's unwinder in.
+    comptime NOUNWIND = " -force-attribute=nounwind "
     if debug:
         # No IR-level optimization: keep source lines <-> code honest.
         _ = shx(
+            String("opt -passes=forceattrs") + NOUNWIND + ir_arm
+            + " -o " + ir_opt
+        )
+        _ = shx(
             String("llc -O1") + mcu_flags.replace(
                 " -function", " -frame-pointer=all -function"
-            ) + ir_arm + " -o " + fw_obj
+            ) + ir_opt + " -o " + fw_obj
         )
     else:
-        _ = shx(String("opt -O2 ") + ir_arm + " -o " + ir_opt)
+        _ = shx(String("opt -O2") + NOUNWIND + ir_arm + " -o " + ir_opt)
         _ = shx(String("llc -O2") + mcu_flags + ir_opt + " -o " + fw_obj)
 
     print("[4/4] boot2 from source + assemble crt0 + link")
@@ -190,7 +209,7 @@ def build_rv32(main_mojo: String, name: String, debug: Bool) raises -> String:
     var elf = String("build/") + name + ".elf"
 
     print("[1/3] Mojo -> riscv32 object (native, no retarget)")
-    var mojo = String(prefix) + "/bin/mojo build --emit=object"
+    var mojo = String(prefix) + "/bin/mojo build --emit=object" + MOJO_FIRMWARE_FLAGS
     if debug:
         mojo += " -g --no-optimization"
     mojo += (
@@ -208,7 +227,7 @@ def build_rv32(main_mojo: String, name: String, debug: Bool) raises -> String:
     # crt0_rv32.S (a .word table, then mtvec's 4-byte target — its low
     # bits are the MODE field). The startup file keeps its alignment.
     var cc = String(
-        "clang --target=riscv32-unknown-none-elf -march=rv32i -mno-relax -c "
+        CLANG + " --target=riscv32-unknown-none-elf -march=rv32i -mno-relax -c "
     )
     _ = shx(cc + "runtime/crt0_rv32.S -o " + crt0)
     _ = shx(cc + "runtime/rp2350_image_def.S -o " + imgdef)

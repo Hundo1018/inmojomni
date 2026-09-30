@@ -254,7 +254,8 @@ def main() raises:
         slash = n
         searched = n + 1
     if slash != -1:
-        base = String(base[byte = slash + 1 : base.byte_length()])
+        var trimmed_base = String(base[byte = slash + 1 : base.byte_length()])
+        base = trimmed_base^
     print(
         "  ✓ " + base + ": boot2 CRC, vector table, memory layout all OK"
     )

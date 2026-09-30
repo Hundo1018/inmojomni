@@ -6,7 +6,7 @@
   </defs>
   <rect x="0" y="0" width="880" height="340" rx="8" fill="#ffffff" stroke="#d0d7de"/>
   <text x="24" y="34" font-size="16" font-weight="600" fill="#1f2328">How Mojo reaches a chip its LLVM cannot target</text>
-  <text x="24" y="54" font-size="12" fill="#57606a">Mojo's bundled LLVM has no 32-bit ARM backend — so emit for a target with the identical data model, then retarget the IR.</text>
+  <text x="24" y="54" font-size="12" fill="#57606a">Mojo's shipped LLVM has no 32-bit ARM backend — so emit for a target with the identical data model, then retarget the IR.</text>
 
   <!-- row 1 boxes -->
   <rect x="30" y="80" width="200" height="56" rx="8" fill="#fff8f5" stroke="#F74C00" stroke-width="1.5"/>
@@ -24,7 +24,7 @@
   <!-- row 2 boxes -->
   <rect x="650" y="220" width="200" height="56" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
   <text x="750" y="243" font-size="13" font-weight="600" fill="#1f2328" text-anchor="middle">Cortex-M0+ object</text>
-  <text x="750" y="261" font-size="11" fill="#57606a" text-anchor="middle">system opt -O2 · llc -O2</text>
+  <text x="750" y="261" font-size="11" fill="#57606a" text-anchor="middle">pinned LLVM 23 opt -O2 · llc -O2</text>
 
   <rect x="340" y="220" width="200" height="56" rx="8" fill="#f6f8fa" stroke="#d0d7de"/>
   <text x="440" y="243" font-size="13" font-weight="600" fill="#1f2328" text-anchor="middle">firmware.elf</text>
@@ -40,7 +40,7 @@
 
   <line x1="540" y1="108" x2="646" y2="108" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr)"/>
   <text x="593" y="84" font-size="10.5" fill="#F74C00" text-anchor="middle" font-weight="600">tools/retarget.mojo</text>
-  <text x="593" y="98" font-size="10" fill="#57606a" text-anchor="middle">triple + datalayout + syntax downgrade</text>
+  <text x="593" y="98" font-size="10" fill="#57606a" text-anchor="middle">triple · datalayout · target-cpu/features</text>
 
   <!-- vertical arrow -->
   <line x1="750" y1="136" x2="750" y2="216" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -54,5 +54,5 @@
   <line x1="340" y1="248" x2="234" y2="248" stroke="#57606a" stroke-width="1.5" marker-end="url(#arr)"/>
   <text x="287" y="238" font-size="10.5" fill="#57606a" text-anchor="middle">probe-rs (SWD) or UF2</text>
 
-  <text x="24" y="320" font-size="10.5" fill="#8b949e">When a Mojo nightly introduces new IR syntax, support is one rewrite rule — guarded by unit tests; a daily CI job builds against the newest nightly.</text>
+  <text x="24" y="320" font-size="10.5" fill="#8b949e">Host LLVM is pinned next to Mojo's own, so new IR syntax passes through; a daily CI job builds against the newest stable Mojo release.</text>
 </svg>
