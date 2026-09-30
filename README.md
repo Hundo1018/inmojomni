@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/Hundo1018/inmojomni/actions/workflows/ci.yml/badge.svg)](https://github.com/Hundo1018/inmojomni/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Mojo](https://img.shields.io/badge/Mojo-nightly-F74C00)](https://docs.modular.com/mojo/)
+[![Mojo](https://img.shields.io/badge/Mojo-1.1.0%20stable-F74C00)](https://docs.modular.com/mojo/)
 [![Platform](https://img.shields.io/badge/platform-RP2040%20(Cortex--M0%2B)%20%7C%20RP2350%20(Hazard3%20RISC--V)-8A2BE2)](https://www.raspberrypi.com/documentation/microcontrollers/silicon.html)
 
 **Bare-metal Raspberry Pi Pico (RP2040) and Pico 2 (RP2350) firmware, written in Mojo.**
@@ -31,8 +31,8 @@ def start() abi("C"):
         sleep_ms(250)
 ```
 
-> **Status: experimental.** Built on the Mojo nightly toolchain; the language is not
-> yet 1.0. Every claim in this README is backed by an automated test that runs on
+> **Status: experimental.** Built on the newest stable Mojo release (1.1.0),
+> pinned exactly. Every claim in this README is backed by an automated test that runs on
 > real hardware (`pixi run test`).
 
 ## Why this is interesting
@@ -89,18 +89,22 @@ def start() abi("C"):
 
 ## How it works
 
-Mojo's bundled LLVM has no 32-bit ARM backend. The build pipeline works around
-this by emitting IR for a target with an identical data model, then retargeting:
+Mojo's shipped LLVM has no 32-bit ARM backend (its build configures only the
+AArch64, RISCV and X86 backends). The build pipeline works around this by
+emitting IR for a target with an identical data model, then retargeting:
 
-![Build pipeline: Mojo emits riscv32 IR, tools/retarget.mojo rewrites it to ARMv6-M, the system LLVM finishes the job](docs/assets/pipeline.svg)
+![Build pipeline: Mojo emits riscv32 IR, tools/retarget.mojo rewrites it to ARMv6-M, the pinned host LLVM finishes the job](docs/assets/pipeline.svg)
 
 riscv32 and ARMv6-M share the ILP32 little-endian data model, so the IR is
-layout-compatible; the retarget step rewrites the triple and datalayout and
-downgrades IR constructs the system LLVM does not know yet (`captures(none)`,
-`#dbg_*` records, `f0x` float literals, single-argument lifetime intrinsics).
-The rewrite is guarded by unit tests, `opt -verify`, and a check that the number
-of volatile operations is preserved end to end. When a Mojo nightly introduces
-new syntax, supporting it is one rule in [tools/retarget.mojo](tools/retarget.mojo).
+layout-compatible. The retarget step changes only what names the target: the
+triple, the datalayout, and the `target-cpu`/`target-features` attributes. The
+host LLVM (`opt`/`llc` 23.1.2) is pinned in pixi.toml close to Mojo's own LLVM,
+so newer IR syntax (`#dbg_*` records, `captures(...)`, `f0x` literals, GEP
+`nuw`) passes through unchanged. `opt -force-attribute=nounwind` marks every
+function as non-unwinding, which is true on bare metal and keeps libgcc's
+unwinder out of the image. The step is guarded by unit tests, `opt -verify`,
+a host-LLVM version check, and a check that the number of volatile operations
+is preserved end to end.
 The pipeline driver itself is a Mojo program ([tools/build.mojo](tools/build.mojo)).
 
 ### The RP2350 (Pico 2) needs none of this
@@ -195,7 +199,7 @@ no clone needed:
 
 ```sh
 pixi init myproject && cd myproject
-pixi workspace channel add https://conda.modular.com/max-nightly
+pixi workspace channel add https://conda.modular.com/max
 # git dependencies use the pixi-build preview: add to [workspace] in pixi.toml
 #   preview = ["pixi-build"]
 pixi add --git https://github.com/Hundo1018/inmojomni.git inmojomni
@@ -211,7 +215,7 @@ development uses a clone:
 
 ```sh
 git clone https://github.com/Hundo1018/inmojomni.git && cd inmojomni
-pixi install        # fetches the pinned Mojo nightly toolchain (first time only)
+pixi install        # fetches the pinned Mojo + LLVM toolchain (first time only)
 pixi run flash      # build + flash over SWD; the LED starts blinking
 ```
 
@@ -487,7 +491,7 @@ probe is present.
 
 | Stage | What it checks |
 |---|---|
-| host-unit | IR retarget rules against synthetic new-LLVM syntax, then `opt -verify`; volatile-op count preservation; boot2 CRC self-check; PIO assembler encodings incl. side-set, forward-label fixups and comptime==runtime equivalence |
+| host-unit | IR retarget against synthetic modern-LLVM syntax (must pass through unchanged), then `opt -verify` and `llc` with the pinned host LLVM; volatile-op count preservation; boot2 CRC self-check; PIO assembler encodings incl. side-set, forward-label fixups and comptime==runtime equivalence |
 | compile-fail | `Pin[30]()` must be rejected at compile time |
 | build+static | Three firmware builds; ELF verification (boot2 CRC32, vector table, memory bounds); DWARF line tables present |
 | hw-mailbox | 26 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events/interrupts, timer, PIO incl. side-set + forward labels + comptime assembly, NVIC dispatch, RTT, PWM, ADC temperature, UART loopback, dual-core launch, contended spinlocks, inter-core FIFO |
@@ -514,7 +518,10 @@ each firmware runs the whole suite three times (medians reported, cross-run
 spread under 2% enforced). Baselines: `arm-none-eabi-gcc -O2`, `clang -O2`
 (the same LLVM backend the Mojo pipeline uses — the fair yardstick for
 language overhead) and Rust `-C opt-level=2` (also LLVM), all linked with the
-same crt0 and libgcc.
+same crt0 and libgcc. The numbers below were measured on the toolchain named
+in each section of [docs/BENCHMARKS.md](docs/BENCHMARKS.md) (LLVM 18 and a
+Mojo 1.0 pre-release nightly); they have not yet been re-measured on the
+current pins (Mojo 1.1.0, LLVM 23.1.2).
 
 ![Benchmark results: Mojo matches same-backend C on every workload](docs/assets/benchmarks.svg)
 
@@ -609,7 +616,7 @@ tests/               host/ (unit), compile_fail/, on_target/ (on-board Mojo
 bench/               bench.mojo + bench.c + bench.rs (identical workloads),
                      bench_rp2350.* (same kernels, rv32imac + mcycle)
 docs/                BENCHMARKS.md, design notes
-.github/workflows/   CI: host test suite + firmware size gate
+.github/workflows/   CI: host test suite + firmware size gate + RP2350 build
 .vscode/             F5 debug configuration + RP2040 SVD
 ```
 
@@ -617,19 +624,16 @@ docs/                BENCHMARKS.md, design notes
 
 - No I²C, SPI, DMA or USB drivers yet; UART is polled TX/RX only (no
   interrupts, no RX ring buffer).
-- **RP2350 / Pico 2: hardware-verified surface is blink, GPIO, PIO (incl.
-  PIO2), dual-core, the four-language benchmark, probe flashing and
-  source-level debugging.** PWM, ADC, UART, RTT and interrupts are
-  chip-generic in source and compile for the RP2350, but are exercised on
-  real hardware only on the RP2040 so far. probe-rs cannot attach to a
+- **RP2350 / Pico 2:** probe-rs cannot attach to a
   running Hazard3 (its RP235x target drives the M33 debug AP); flashing and
   debugging go through the raspberrypi/openocd fork instead — see
   [Debugging](#debugging-the-pico-2-rp2350-risc-v).
-- The toolchain tracks Mojo *nightly*; a compiler update can require a new
-  retarget rule (mechanical, test-guarded, but a moving target). A scheduled
-  CI job re-tests against the newest nightly daily, so breakage surfaces
-  within a day of the nightly that caused it. (The riscv32 backend both paths
-  rest on is an unofficial Mojo tier — see [docs/ROADMAP.md](docs/ROADMAP.md).)
+- The toolchain tracks the newest *stable* Mojo release, pinned exactly. A
+  scheduled CI job (`stable-latest`) lifts the pins and re-runs the host tier
+  daily, so a new release that needs work is visible before the pins move.
+  Both firmware paths rest on Mojo's riscv32 code generation, which has no
+  support commitment: stable 1.0.0 shipped with it disabled (fixed in 1.1.0).
+  See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## License
 

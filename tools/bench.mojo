@@ -95,7 +95,7 @@ def build_c(cc: String) raises -> String:
         # arm-none-eabi libgcc.a is built with (no enums cross the
         # boundary; this only silences linker ABI-tag warnings).
         _ = buildmod.sh(
-            "clang --target=armv6m-none-eabi -mcpu=cortex-m0plus -O2"
+            buildmod.CLANG + " --target=armv6m-none-eabi -mcpu=cortex-m0plus -O2"
             + " -ffreestanding -fshort-enums"
             + " -ffunction-sections -fdata-sections -c bench/bench.c -o "
             + obj

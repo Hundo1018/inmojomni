@@ -14,34 +14,34 @@ comptime CLR_ALIAS: UInt32 = 0x3000
 
 @always_inline
 def read32(addr: UInt32) -> UInt32:
-    var p = UnsafePointer[UInt32, MutUntrackedOrigin](
+    var p = Pointer[UInt32, MutUntrackedOrigin](
         unsafe_from_address=Int(addr)
     )
-    return p.load[volatile=True]()
+    return p.unsafe_load[volatile=True]()
 
 
 @always_inline
 def write32(addr: UInt32, value: UInt32):
-    var p = UnsafePointer[UInt32, MutUntrackedOrigin](
+    var p = Pointer[UInt32, MutUntrackedOrigin](
         unsafe_from_address=Int(addr)
     )
-    p.store[volatile=True](0, value)
+    p.unsafe_store[volatile=True](0, value)
 
 
 @always_inline
 def read8(addr: UInt32) -> UInt8:
-    var p = UnsafePointer[UInt8, MutUntrackedOrigin](
+    var p = Pointer[UInt8, MutUntrackedOrigin](
         unsafe_from_address=Int(addr)
     )
-    return p.load[volatile=True]()
+    return p.unsafe_load[volatile=True]()
 
 
 @always_inline
 def write8(addr: UInt32, value: UInt8):
-    var p = UnsafePointer[UInt8, MutUntrackedOrigin](
+    var p = Pointer[UInt8, MutUntrackedOrigin](
         unsafe_from_address=Int(addr)
     )
-    p.store[volatile=True](0, value)
+    p.unsafe_store[volatile=True](0, value)
 
 
 @always_inline

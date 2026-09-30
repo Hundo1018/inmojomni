@@ -1,6 +1,6 @@
 """Mojo language-feature measurements on RP2350 silicon (Hazard3, rv32imac).
 
-Answers, with mcycle numbers instead of folklore, on the pinned nightly:
+Answers, with mcycle numbers instead of folklore, on the pinned toolchain:
 
   1. traits      — is a trait-bound generic call really zero-cost?
   2. struct size — does size_of report the expected layouts/padding?
@@ -48,8 +48,8 @@ def _cyc() -> UInt32:
 
 
 @always_inline
-def _ram(addr: UInt32) -> UnsafePointer[UInt32, MutUntrackedOrigin]:
-    return UnsafePointer[UInt32, MutUntrackedOrigin](
+def _ram(addr: UInt32) -> Pointer[UInt32, MutUntrackedOrigin]:
+    return Pointer[UInt32, MutUntrackedOrigin](
         unsafe_from_address=Int(addr)
     )
 
@@ -125,11 +125,11 @@ def _entry(i: UInt32) -> UInt32:
     return (i * 0x1081) ^ (i << 3) ^ 0x5A5A
 
 
-def _mk_lut() -> InlineArray[UInt32, 16]:
-    var t = InlineArray[UInt32, 16](fill=0)
+def _mk_lut() -> Array[UInt32, 16]:
+    var t = Array[UInt32, 16](fill=0)
     for i in range(16):
         t[i] = _entry(UInt32(i))
-    return t
+    return t^
 
 
 comptime LUT = _mk_lut()
@@ -137,9 +137,12 @@ comptime LUT = _mk_lut()
 
 def via_lut() -> Tuple[UInt32, UInt32]:
     var x = read32(SEED)
+    # Mojo >=1.0: Array is not ImplicitlyCopyable, so the comptime table is
+    # materialized explicitly, once, outside the timed loop.
+    var lut = materialize[LUT]()
     var t0 = _cyc()
     for _ in range(N):
-        x = (x >> 4) ^ LUT[Int(x & 15)] ^ (x << 9)
+        x = (x >> 4) ^ lut[Int(x & 15)] ^ (x << 9)
     return (_cyc() - t0, x)
 
 
@@ -160,8 +163,8 @@ def via_unrolled() -> Tuple[UInt32, UInt32]:
     var t0 = _cyc()
     for _ in range(N):
         comptime for i in range(16):
-            acc += buf.load(i) * UInt32(i + 1)
-        buf.store(0, acc)
+            acc += buf.unsafe_load(i) * UInt32(i + 1)
+        buf.unsafe_store(0, acc)
     return (_cyc() - t0, acc)
 
 
@@ -171,8 +174,8 @@ def via_rolled() -> Tuple[UInt32, UInt32]:
     var t0 = _cyc()
     for _ in range(N):
         for i in range(16):
-            acc += buf.load(i) * UInt32(i + 1)
-        buf.store(0, acc)
+            acc += buf.unsafe_load(i) * UInt32(i + 1)
+        buf.unsafe_store(0, acc)
     return (_cyc() - t0, acc)
 
 

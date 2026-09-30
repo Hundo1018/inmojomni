@@ -39,7 +39,8 @@ def _hex(h: String) raises -> UInt32:
     """Parse a hex token (openocd read_memory prints '0x..')."""
     var body = h
     if body.startswith("0x") or body.startswith("0X"):
-        body = String(body[byte=2:])
+        var trimmed_body = String(body[byte=2:])
+        body = trimmed_body^
     var v: UInt32 = 0
     for b in body.codepoints():
         var d = Int(b.to_u32())
@@ -75,6 +76,7 @@ def main() raises:
     b2._shared_objs()
     _ = buildmod.shx(
         prefix + "/bin/mojo build --emit=object"
+        + buildmod.MOJO_FIRMWARE_FLAGS
         + " --target-triple=riscv32-unknown-none-elf"
         + " --target-features=+m,+a,+c"
         + " -I " + prefix + "/lib/mojo -I src"

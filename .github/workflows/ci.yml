@@ -1,6 +1,7 @@
 # Host-side CI: everything that can be verified without a debug probe.
 # Local equivalent:
-#   sudo apt install gcc-arm-none-eabi llvm clang && pixi run test-host
+#   sudo apt install gcc-arm-none-eabi && pixi run test-host
+# (Mojo, LLVM opt/llc, clang and ld.lld all come pinned from pixi.toml.)
 name: CI
 
 on:
@@ -8,7 +9,7 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: "23 3 * * *"  # daily: catch breaking Mojo nightlies early
+    - cron: "23 3 * * *"  # daily: try the newest stable Mojo release
   workflow_dispatch:
 
 concurrency:
@@ -23,13 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install cross toolchain (arm-none-eabi-gcc, LLVM 18, clang)
+      - name: Install arm-none-eabi-gcc (RP2040 crt0/boot2/link, libgcc)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-arm-none-eabi llvm clang binutils-arm-none-eabi
+            gcc-arm-none-eabi binutils-arm-none-eabi
 
-      - name: Set up pixi (pinned Mojo nightly toolchain)
+      - name: Set up pixi (pinned Mojo + LLVM toolchain)
         uses: prefix-dev/setup-pixi@v0.8.1
         with:
           cache: true
@@ -50,6 +51,9 @@ jobs:
           echo "blink .text = ${text} bytes"
           test "$text" -le 1024
 
+      - name: RP2350 build (native riscv32, no retarget)
+        run: pixi run build-rp2350
+
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -59,26 +63,32 @@ jobs:
             build/firmware.map
             build/firmware-debug.elf
 
-  # The project tracks Mojo nightly: this job ignores the lockfile and
-  # tests against the newest toolchain every day, so a breaking nightly
-  # (usually just a new IR construct for tools/retarget.mojo) surfaces
-  # here instead of on a developer's machine.
-  nightly-latest:
+  # The project tracks the newest STABLE Mojo release, pinned exactly in
+  # pixi.toml. This job lifts the Mojo pins (host LLVM stays pinned) and
+  # re-runs the host tier daily, so a new stable release that needs work
+  # shows up here before anyone bumps the pins.
+  stable-latest:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Install cross toolchain (arm-none-eabi-gcc, LLVM 18, clang)
+      - name: Install arm-none-eabi-gcc (RP2040 crt0/boot2/link, libgcc)
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            gcc-arm-none-eabi llvm clang binutils-arm-none-eabi
+            gcc-arm-none-eabi binutils-arm-none-eabi
       - name: Set up pixi
         uses: prefix-dev/setup-pixi@v0.8.1
         with:
           cache: false
-      - name: Update to the newest Mojo nightly
-        run: pixi update
-      - name: Host test suite on latest nightly
+      - name: Lift the Mojo pins to the newest stable release
+        run: |
+          sed -i -E 's/^(mojo-compiler|mojo|modular) = "==[^"]+"/\1 = "*"/' pixi.toml
+          grep -nE '^(mojo-compiler|mojo|modular) =' pixi.toml
+          pixi update
+          pixi run mojo --version | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Host test suite on the newest stable release
         run: pixi run test-host
+      - name: RP2350 build on the newest stable release
+        run: pixi run build-rp2350

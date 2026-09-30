@@ -87,7 +87,7 @@ def write(s: StaticString):
 
 def write_u32(v: UInt32):
     """Append a decimal number."""
-    var digits = InlineArray[UInt8, 10](fill=0)
+    var digits = Array[UInt8, 10](fill=0)
     var n = v
     var count = 0
     while True:

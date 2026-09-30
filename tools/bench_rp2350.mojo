@@ -105,7 +105,7 @@ def _shared_objs() raises:
     # -mno-relax: linker relaxation breaks hand-alignment in crt0_rv32.S
     # (mtvec target must stay 4-aligned — low bits are the MODE field)
     var cc = (
-        String("clang --target=riscv32-unknown-none-elf ")
+        String(buildmod.CLANG) + " --target=riscv32-unknown-none-elf "
         + MARCH + " -mno-relax -c "
     )
     _ = buildmod.sh(cc + "runtime/crt0_rv32.S -o build/crt0_rv32.o")
@@ -125,6 +125,7 @@ def build_mojo() raises -> String:
     var prefix = buildmod.toolchain_prefix()
     _ = buildmod.shx(
         prefix + "/bin/mojo build --emit=object"
+        + buildmod.MOJO_FIRMWARE_FLAGS
         + " --target-triple=riscv32-unknown-none-elf"
         + " --target-features=+m,+a,+c"
         + " -I " + prefix + "/lib/mojo -I src"
@@ -144,7 +145,7 @@ def build_c(cc: String) raises -> String:
         )
     else:
         _ = buildmod.shx(
-            String("clang --target=riscv32-unknown-none-elf ") + MARCH
+            String(buildmod.CLANG) + " --target=riscv32-unknown-none-elf " + MARCH
             + " -O2 -ffreestanding -c bench/bench_rp2350.c -o " + obj
         )
     _link(obj, elf)
