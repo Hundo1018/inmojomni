@@ -70,11 +70,12 @@ def _to_ticks[C: Chip](timeout_us: UInt32) -> UInt32:
 
 
 def _fifo_drain[C: Chip]():
-    # CAUTION: `_ = read32(FIFO_RD)` gets discarded whole by the Mojo
-    # elaborator — the volatile load never reaches LLVM and the drain
-    # spins forever on VLD (found the hard way, verified in the IR).
-    # Feeding the value into a compare whose branch has a side effect
-    # keeps the pop alive.
+    # Historical: on nightlies up to 2026-07 a bare `_ = read32(FIFO_RD)`
+    # was discarded whole by the Mojo elaborator — the volatile load never
+    # reached LLVM and the drain spun forever on VLD (upstream #6755, fixed
+    # in Mojo 1.0.0; IR-probed on 1.1.0: the pop survives as `lw zero`).
+    # Feeding the value into a compare is kept as the hardware-verified
+    # form until the on-target multicore test is re-run on 1.1.0.
     var junk: UInt32 = 0
     while (read32(C.SIO_FIFO_ST) & _ST_VLD) != 0:
         junk ^= read32(C.SIO_FIFO_RD)

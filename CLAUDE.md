@@ -12,9 +12,14 @@ gate it, don't claim it. Global rules: `~/.claude/CLAUDE.md`.
   decision 2026-09-30). Pins in pixi.toml are exact (`==`): the packaging
   path resolves the newest match and stable 1.0.0 shipped with riscv32 emit
   disabled. Bump = edit the 5 Mojo pins (`mojo-compiler` ×3, `mojo`,
-  `modular`) → `pixi update` → `test-host` + `build-rp2350` → hardware gates.
-  CI `stable-latest` (daily) lifts the Mojo pins and runs the host tier:
-  red = a new stable release needs work, priority zero.
+  `modular` — pick the `modular` release whose dependency is `mojo ==<new>`,
+  `pixi search -c https://conda.modular.com/max modular`) → `pixi update` →
+  `test-host` + `build-rp2350` → hardware gates → update the version
+  literals: README badge, Status paragraph, "current pins", limitations,
+  pixi.toml comment, docs/BENCHMARKS.md toolchain note.
+  CI `stable-latest` (daily) lifts the Mojo pins and runs `test-host` +
+  `build-rp2350` (not the blink size gate): red = a new stable release needs
+  work, priority zero.
 - **Host LLVM is pinned too** (`llvm-tools`/`clang-23`/`lld` 23.1.2 from
   conda-forge; `HOST_LLVM_MAJOR` in tools/retarget.mojo, checked by
   test_retarget). Keep it the newest conda-forge release: Mojo's own LLVM is
@@ -28,7 +33,8 @@ gate it, don't claim it. Global rules: `~/.claude/CLAUDE.md`.
 - Tooling language: new tools are Mojo (`tools/*.mojo`). Python exists only
   as test rig (run_tests.py, hil.py, dap_client.py) — don't grow it.
 - Commit/push: user has authorized push to THIS repo. Commit messages end
-  with the Claude co-author line. CI must be green before you call a push done.
+  with NO Claude attribution (user is sole author; see ~/.claude/CLAUDE.md).
+  CI must be green before you call a push done.
 
 ## Commands (all via pixi; `pixi run <task>`)
 
@@ -73,13 +79,18 @@ ONLY for `test`/`test-host` (they print `=== summary ===`); for builds use
 
 ## Mojo gotchas (all verified on hardware/IR; keep list updated)
 
-- `_ = read32(addr)` **discards the volatile load in the elaborator** — it
-  never reaches LLVM. Route the value into a compare whose branch has a side
-  effect (pattern in src/pico/multicore.mojo `_fifo_drain`).
+- `_ = read32(addr)` **used to be discarded whole by the elaborator** (nightlies
+  ≤ 2026-07; upstream #6755, fixed in 1.0.0). IR-probed 2026-10-10 on 1.1.0: the
+  discarded volatile load survives `opt -O2` and reaches riscv32 codegen as
+  `lw zero, off(a0)`. The compare-with-side-effect pattern in
+  src/pico/multicore.mojo `_fifo_drain` / uart.mojo `read_byte` is now
+  defensive only — keep it until the on-target multicore test is re-run on
+  1.1.0 with the probe, then it may be simplified.
 - `len(myString)` is a compile error → `s.byte_length()`; slice `s[byte=a:b]`.
-- Bare int literals may not compare with UInt32 on newer nightlies — write
-  `UInt32(10) > x`, not `10 > x` (packaging builds resolve the NEWEST nightly,
-  not the lockfile, so this breaks there first).
+- An int literal on the LEFT of a comparison with UInt32 is a compile error on
+  1.1.0 (`10 > x`, `10 < x`, `3 == x`: "no matching method in call to
+  __gt__/__lt__/__eq__"); literal on the right (`x < 10`) is fine. Write
+  `UInt32(10) > x` or flip the operands.
 - A `comptime VALUE = f()` whose type holds an `Array` cannot be
   `ImplicitlyCopyable`; use it at runtime via `materialize[VALUE]()`
   (`comptime assert VALUE.field` works directly). See `Asm` in src/pico/pio.mojo.
@@ -89,7 +100,9 @@ ONLY for `test`/`test-host` (they print `=== summary ===`); for builds use
 - Mojo ≥1.0 (verified on 1.1.0 stable and 1.2.0.dev2026092905, host tier):
   - `InlineArray` → `Array` (params `T`, `length`); no alias left.
   - `UnsafePointer` → `Pointer`; `.load`/`.store` → `.unsafe_load`/
-    `.unsafe_store` (volatile ops still reach LLVM; count is gated).
+    `.unsafe_store` (volatile ops still reach LLVM; count is gated). On
+    1.1.0 the old names still compile with "is deprecated" warnings — grep
+    build output for `deprecated` when porting.
   - `x = String(x[byte=a:b])` is an aliasing error → go through a temp
     (`var t = String(x[byte=a:b]); x = t^`).
   - Bounds checks on by default: a failing check formats through a 2 KB

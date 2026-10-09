@@ -74,9 +74,10 @@ def loopback[C: Chip = RP2040](enable: Bool):
     write32(C.UART0_BASE + _CR, cr | UART_CR_UARTEN)
     if enable:
         # Until now the receiver was sampling the unrouted (low) pad
-        # and has collected break garbage — flush it. read_byte keeps
-        # the volatile pops alive (its value is compared; a bare
-        # `_ = read32(DR)` would be elaborated away entirely).
+        # and has collected break garbage — flush it. read_byte compares
+        # the popped value (on pre-1.1.0 nightlies a bare `_ = read32(DR)`
+        # was elaborated away, #6755; 1.1.0 keeps it — compare retained
+        # as the hardware-verified form).
         while read_byte[C](300) != -1:
             pass
 

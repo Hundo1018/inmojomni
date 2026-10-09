@@ -19,7 +19,7 @@ Same shape as tools/bench.mojo (RP2040) with the Pico 2 realities:
 Host verification (same gates as RP2040): checksums identical across
 runs and across all four languages; per-workload run spread < 2%.
 
-Usage: pixi run bench-rp2350   (Pico 2 in BOOTSEL, clang + rustc)
+Usage: pixi run bench-rp2350   (Pico 2 in BOOTSEL, rustc; clang-23 comes from pixi)
 """
 
 from std.subprocess import run

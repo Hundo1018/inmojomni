@@ -12,7 +12,7 @@ Each firmware executes the whole suite RUNS times. The host verifies:
   - checksums are identical across all four languages.
 Median times go to the console table and build/bench_results.csv.
 
-Usage: pixi run bench   (requires a CMSIS-DAP probe, clang and rustc)
+Usage: pixi run bench   (requires a CMSIS-DAP probe and rustc; clang-23 comes from pixi)
 """
 
 from std.time import sleep

@@ -185,7 +185,8 @@ around. One 36-stage benchmark session runs unattended end to end.
 Ubuntu/Debian:
 
 ```sh
-sudo apt install gcc-arm-none-eabi llvm clang openocd gdb-multiarch
+sudo apt install gcc-arm-none-eabi openocd gdb-multiarch
+# LLVM opt/llc, clang-23 and ld.lld come from pixi (pinned in pixi.toml); no system LLVM is used.
 cargo install probe-rs-tools        # or see probe.rs for installers
 curl -fsSL https://pixi.sh/install.sh | bash
 # optional, only for the Rust benchmark baseline:
@@ -226,7 +227,7 @@ pixi run flash      # build + flash over SWD; the LED starts blinking
 | `pixi run uf2` | Build `build/firmware.uf2` for BOOTSEL drag-and-drop (no probe needed) |
 | `pixi run test` | Full test suite; hardware stages are skipped when no probe is attached |
 | `pixi run test-host` | Host-only tests (no hardware required) |
-| `pixi run bench` | On-target Mojo vs C vs Rust benchmark (requires probe, `clang`, `rustc`) |
+| `pixi run bench` | On-target Mojo vs C vs Rust benchmark (requires probe and `rustc`; `clang-23` comes from pixi) |
 | `pixi run bench-rp2350` | Same four-language benchmark on a Pico 2 in BOOTSEL (no probe needed) |
 | `pixi run features-rp2350` | Mojo language-feature measurements on Pico 2 silicon |
 | `pixi run piomc-rp2350` | Pico 2 PIO (incl. PIO2) + dual-core hardware proof |
@@ -546,8 +547,8 @@ compiler-builtins instead of libgcc (division, soft-float): those rows compare
 runtime libraries, not languages. Interpreted Python firmwares
 (MicroPython/CircuitPython) were **not** measured. Full methodology, binary
 sizes and caveats: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Reproduce:
-`pixi run bench` (probe, `clang`, and `rustc` with the `thumbv6m-none-eabi`
-target), then `pixi run chart`.
+`pixi run bench` (probe, and `rustc` with the `thumbv6m-none-eabi`
+target; `clang-23` comes from pixi), then `pixi run chart`.
 
 ### RP2350 / Pico 2 (Hazard3, RISC-V)
 
@@ -585,8 +586,8 @@ than a rounding artifact. The Rust soft-float row again compares runtime
 libraries, not languages (its compiler-builtins beat libgcc's soft-float
 roughly 2×). Mojo produces the smallest firmware of the four
 (`.text` 4,196 B vs 4,590–14,064 B). Reproduce: `pixi run bench-rp2350`
-(Pico 2 in BOOTSEL; `clang`, riscv-gcc, and `rustc` with the
-`riscv32imac-unknown-none-elf` target).
+(Pico 2 in BOOTSEL; riscv-gcc, and `rustc` with the
+`riscv32imac-unknown-none-elf` target; `clang-23` comes from pixi).
 
 Language-feature measurements on the same silicon (traits are zero-cost;
 the struct-passing register boundary is 8 bytes; a comptime lookup table in
@@ -629,8 +630,9 @@ docs/                BENCHMARKS.md, design notes
   debugging go through the raspberrypi/openocd fork instead — see
   [Debugging](#debugging-the-pico-2-rp2350-risc-v).
 - The toolchain tracks the newest *stable* Mojo release, pinned exactly. A
-  scheduled CI job (`stable-latest`) lifts the pins and re-runs the host tier
-  daily, so a new release that needs work is visible before the pins move.
+  scheduled CI job (`stable-latest`) lifts the Mojo pins and re-runs
+  `test-host` + `build-rp2350` daily (not the blink size gate), so a new
+  release that needs work is visible before the pins move.
   Both firmware paths rest on Mojo's riscv32 code generation, which has no
   support commitment: stable 1.0.0 shipped with it disabled (fixed in 1.1.0).
   See [docs/ROADMAP.md](docs/ROADMAP.md).
