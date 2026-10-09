@@ -13,3 +13,6 @@ kgen.trace.json*
 
 # pixi build output
 *.conda
+
+# promo drafts: local only, never on GitHub (user directive 2026-10-10)
+docs/promo/

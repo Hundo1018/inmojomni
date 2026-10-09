@@ -30,6 +30,8 @@ gate it, don't claim it. Global rules: `~/.claude/CLAUDE.md`.
 - Docs: README/BENCHMARKS = English, rigorous, no hype adjectives.
   docs/ROADMAP.md = internal, zh-TW. Never mention "pico-drone" or
   "pico-mojo" in public docs (user directive; project name is inmojomni).
+- **docs/promo/ is local-only** (gitignored; user directive 2026-10-10): no promo
+  draft may ever be committed or pushed. Keep new drafts there.
 - Tooling language: new tools are Mojo (`tools/*.mojo`). Python exists only
   as test rig (run_tests.py, hil.py, dap_client.py) — don't grow it.
 - Commit/push: user has authorized push to THIS repo. Commit messages end
