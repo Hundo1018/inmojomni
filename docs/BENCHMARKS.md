@@ -154,6 +154,92 @@ Reproduce: `pixi run bench-rp2350` with a Pico 2 in BOOTSEL mode (no probe
 needed), then `pixi run chart build/bench_rp2350_results.csv
 docs/assets/benchmarks_rp2350.svg "<subtitle>"`.
 
+## Interrupt latency: IRQ → GPIO, RP2040 (measured 2026-10-18, Mojo 1.1.0 stable, LLVM 23.1.2)
+
+How long from a GPIO edge to the first store of the interrupt handler, in
+Mojo versus C, with the handler in XIP flash versus SRAM — measured by a PIO
+state machine, not estimated from cycle tables. Reproduce: `pixi run irq-latency`
+(one Pico and a CMSIS-DAP probe; no wiring).
+
+### Setup
+
+- RP2040 at **125 MHz**: `pico.clocks.sys_clock_125mhz()` (PLL_SYS from the
+  12 MHz crystal, VCO 1500 MHz / 6 / 2). Every firmware measures its own
+  clk_sys with the on-chip frequency counter and the host rejects anything
+  outside 125 MHz ± 1 %; all twelve runs below reported 125,000–125,001 kHz.
+- **Stimulus:** core 0 drives GPIO 15 high through SIO. The pad input is
+  enabled, so the same pin is the interrupt source — EDGE_HIGH → IO_IRQ_BANK0
+  → `isr_irq13`. Internal loopback, no wire.
+- **Handler:** three stores, identical in both languages and in this order:
+  SIO `GPIO_OUT_SET` (GPIO 16 high), IO_BANK0 `INTR1` (acknowledge), an SRAM
+  counter. The Mojo and clang handlers disassemble to the same instructions
+  (`movs`, `lsls`, `ldr` literal, `str`); gcc orders them differently.
+- **Timer:** PIO0 SM0 clocked at clk_sys runs `wait 1 gpio 15` and then a
+  2-cycle `jmp pin / jmp x--` loop until GPIO 16 reads high, pushing the
+  iteration count. Both pins pass the same 2-stage PIO input synchroniser, so
+  that delay cancels: the count is the pad-to-pad latency in units of two
+  cycles (16 ns). Reported cycles = 2 × count + 2 (`mov` + first `jmp pin`).
+- **Load:** 3 runs × 10,000 interrupts per firmware. Between interrupts the
+  main loop spins on the handler's SRAM counter (single-cycle reads, so a
+  stalled bus access never delays exception entry), pops the FIFO, lowers
+  both pins and pauses 5 µs. The 10,000 raw counts of the last run stay in
+  SRAM for the host.
+- **Handler placement:** Mojo via `tools/build.mojo --ramfunc isr_irq13`
+  (the function's section is renamed into `.ramfunc`, which `link.ld` places
+  in `.data`, copied to SRAM by crt0); C via
+  `__attribute__((section(".ramfunc.isr_irq13")))`. The host verifies the
+  handler address (0x2000_xxxx vs 0x1000_xxxx) from the ELF.
+- **C baselines:** `arm-none-eabi-gcc -O2` (GCC 13.2) and
+  `clang -O2 --target=armv6m-none-eabi` (clang 23.1.2), same `crt0.S`,
+  `link.ld`, clock bring-up and PIO program words (the host checks the words
+  every firmware reports against the reference assembled with `pico.pio.Asm`).
+- **Gates:** clk_sys ± 1 %; PIO program identical; handler placement; exactly
+  10,000 interrupts taken per run (no lost or spurious interrupt); run-to-run
+  spread of the mean < 2 %; min/max/sum recomputed by the host from the raw
+  samples equal the firmware's running statistics.
+
+### Results (ns; pad to pad; 125 MHz; 3 × 10,000 interrupts per firmware)
+
+| Firmware | handler | first IRQ (cold) | min | p50 | p99 | p99.9 | max, warm | mean |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| **Mojo** | flash | 2,176 | 176 | 176 | 176 | 176 | 176 | 176.1 |
+| **Mojo** | SRAM | 976 | 176 | 176 | 176 | 176 | 176 | 176.0 |
+| C gcc | flash | 2,576 | 176 | 176 | 176 | 176 | 176 | 176.1 |
+| C gcc | SRAM | 1,360 | 176 | 176 | 176 | 176 | 176 | 176.0 |
+| C clang | flash | 2,176 | 176 | 176 | 176 | 176 | 176 | 176.1 |
+| C clang | SRAM | 976 | 176 | 176 | 176 | 176 | 176 | 176.0 |
+
+*first IRQ* = run 0, iteration 0 (cold caches, the only slow interrupt);
+*max, warm* = maximum over runs 2–3 (20,000 interrupts); percentiles over the
+last run; resolution 16 ns. The gate was run twice; the two runs agree in
+every cell.
+
+### Interpretation
+
+1. **22 cycles (176 ns), the same for all six firmwares, for every warm
+   interrupt.** Min = p50 = p99 = p99.9 = warm max: over 29,999 interrupts
+   per firmware the PIO saw no variation at 16 ns resolution. Cortex-M0+
+   exception entry is 15 cycles (stacking and vector fetch); the remaining
+   ~7 cover the GPIO input synchroniser, the edge detector, the NVIC and the
+   handler's three instructions before its first store. The true value lies
+   in the 20–22 cycle bin (160–176 ns).
+2. **Mojo pays nothing over C.** Same handler code, same cycle count. The
+   interrupt path is entirely static — a C-ABI function burned into the
+   vector table — so there is no runtime between the NVIC and the handler.
+3. **Flash versus SRAM only matters cold.** With the XIP cache warm the
+   handler's location is invisible. The first interrupt after reset costs
+   2.2 µs (Mojo, clang) / 2.6 µs (gcc) from flash and 1.0 µs / 1.4 µs from
+   SRAM; the vector table itself still lives in flash, and the remaining
+   ~1 µs was not broken down further. Firmware that must meet a bound on the
+   *first* interrupt should put the handler in SRAM and take one interrupt at
+   start-up.
+4. **Caveats.** One board, one chip. The main loop here is the best case for
+   exception entry; a main loop in the middle of a multi-cycle bus
+   transaction (APB read, XIP cache miss) delays entry by the remainder of
+   that transaction, which this rig does not provoke. A higher- or
+   equal-priority interrupt already running adds its own length. Not
+   measured: RP2350, interrupts with `wfi`/`wfe` sleeping cores, DMA traffic.
+
 ## Language-feature measurements, RP2350 (measured 2026-07-18, nightly dev2026071006)
 
 Sixteen on-silicon measurements of Mojo language mechanics (10k iterations

@@ -15,6 +15,7 @@ comptime RESET_IO_BANK0: UInt32 = 1 << 5
 comptime RESET_PADS_BANK0: UInt32 = 1 << 8
 comptime RESET_PIO0: UInt32 = 1 << 10
 comptime RESET_PIO1: UInt32 = 1 << 11
+comptime RESET_PLL_SYS: UInt32 = 1 << 12
 comptime RESET_PWM: UInt32 = 1 << 14
 comptime RESET_TIMER: UInt32 = 1 << 21
 comptime RESET_UART0: UInt32 = 1 << 22
@@ -39,6 +40,31 @@ comptime CLK_SYS_SELECTED: UInt32 = CLOCKS_BASE + 0x44
 
 comptime CLK_REF_SRC_XOSC: UInt32 = 2  # xosc_clksrc
 comptime CLK_SYS_SRC_CLK_REF: UInt32 = 0
+comptime CLK_SYS_SRC_AUX: UInt32 = 1  # clksrc_clk_sys_aux (AUXSRC picks which)
+comptime CLK_SYS_AUXSRC_PLL_SYS: UInt32 = 0 << 5  # AUXSRC field, bits 7:5
+
+# Frequency counter FC0 (§2.15.3.4): counts a clock against clk_ref.
+comptime FC0_REF_KHZ: UInt32 = CLOCKS_BASE + 0x80
+comptime FC0_MIN_KHZ: UInt32 = CLOCKS_BASE + 0x84
+comptime FC0_MAX_KHZ: UInt32 = CLOCKS_BASE + 0x88
+comptime FC0_INTERVAL: UInt32 = CLOCKS_BASE + 0x90  # test interval 2^n ref µs
+comptime FC0_SRC: UInt32 = CLOCKS_BASE + 0x94
+comptime FC0_STATUS: UInt32 = CLOCKS_BASE + 0x98
+comptime FC0_RESULT: UInt32 = CLOCKS_BASE + 0x9C  # KHZ bits 29:5, FRAC 4:0
+comptime FC0_STATUS_DONE: UInt32 = 1 << 4
+comptime FC0_STATUS_RUNNING: UInt32 = 1 << 8
+
+# --- PLL_SYS (§2.18): 12 MHz XOSC -> VCO -> post-dividers -> clk_sys ---
+comptime PLL_SYS_BASE: UInt32 = 0x4002_8000
+comptime PLL_SYS_CS: UInt32 = PLL_SYS_BASE + 0x0  # REFDIV 5:0, LOCK 31
+comptime PLL_SYS_PWR: UInt32 = PLL_SYS_BASE + 0x4
+comptime PLL_SYS_FBDIV_INT: UInt32 = PLL_SYS_BASE + 0x8
+comptime PLL_SYS_PRIM: UInt32 = PLL_SYS_BASE + 0xC  # POSTDIV1 18:16, POSTDIV2 14:12
+comptime PLL_CS_LOCK: UInt32 = 1 << 31
+comptime PLL_PWR_PD: UInt32 = 1 << 0
+comptime PLL_PWR_DSMPD: UInt32 = 1 << 2
+comptime PLL_PWR_POSTDIVPD: UInt32 = 1 << 3
+comptime PLL_PWR_VCOPD: UInt32 = 1 << 5
 comptime CLK_PERI_CTRL: UInt32 = CLOCKS_BASE + 0x48
 comptime CLK_ADC_CTRL: UInt32 = CLOCKS_BASE + 0x60
 comptime CLK_ENABLE: UInt32 = 1 << 11  # generic clock ENABLE bit

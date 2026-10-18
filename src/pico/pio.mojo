@@ -189,10 +189,22 @@ struct Asm(Copyable, Movable):
 
     def wait_gpio(mut self, polarity: Int, gpio: Int, delay: Int = 0,
                   side: Int = -1):
+        """Stall until absolute GPIO `gpio` reads `polarity` (raw pad
+        input, independent of the pin's function select)."""
         self._emit(
             0x2000 | (UInt16(polarity & 1) << 7) | UInt16(gpio & 0x1F),
             delay, side,
         )
+
+    # --- IN / PUSH (§3.4.4, §3.4.6): registers -> ISR -> RX FIFO ------
+
+    def in_x(mut self, count: Int, delay: Int = 0, side: Int = -1):
+        """Shift `count` bits (1..32) of X into the ISR."""
+        self._emit(0x4020 | UInt16(count & 0x1F), delay, side)
+
+    def push_block(mut self, delay: Int = 0, side: Int = -1):
+        """Push the ISR into the RX FIFO (stall while full)."""
+        self._emit(0x8020, delay, side)
 
     # --- OUT / PULL (§3.4.5, §3.4.7): FIFO -> shift register -> pins ---
 
@@ -215,6 +227,11 @@ struct Asm(Copyable, Movable):
 
     def mov_x_pins(mut self, delay: Int = 0, side: Int = -1):
         self._emit(0xA020, delay, side)
+
+    def mov_x_not_null(mut self, delay: Int = 0, side: Int = -1):
+        """X = ~NULL = 0xFFFFFFFF: the start value for a `jmp_x_dec`
+        down-counter (count = ~X afterwards)."""
+        self._emit(0xA02B, delay, side)
 
     def nop(mut self, delay: Int = 0, side: Int = -1):
         self._emit(0xA042, delay, side)  # mov y, y
@@ -296,6 +313,15 @@ struct StateMachine[P: Int, SM: Int, C: Chip = RP2040](
         var v = (cur & ~UInt32(0x3F0001F)) | (UInt32(count & 0x3F) << 20) | UInt32(base & 0x1F)
         write32(self._sm_reg(_PINCTRL), v)
 
+    def set_jmp_pin(self, gpio: Int):
+        """Absolute GPIO that `jmp_pin` tests (EXECCTRL.JMP_PIN). Call
+        after `load()`, which rewrites EXECCTRL."""
+        var reg = self._sm_reg(_EXECCTRL)
+        var cur = read32(reg)
+        write32(
+            reg, (cur & ~(UInt32(0x1F) << 24)) | (UInt32(gpio & 0x1F) << 24)
+        )
+
     def set_sideset_pins(self, base: Int):
         """Base pin for side-set (width comes from the program's
         side_set() declaration via load())."""
@@ -321,6 +347,14 @@ struct StateMachine[P: Int, SM: Int, C: Chip = RP2040](
 
     def tx_push(self, value: UInt32):
         write32(self._base() + _TXF0 + UInt32(Self.SM * 4), value)
+
+    def rx_empty(self) -> Bool:
+        """FSTAT.RXEMPTY for this state machine."""
+        return (read32(self._base() + _FSTAT) >> UInt32(8 + Self.SM)) & 1 != 0
+
+    def rx_pull(self) -> UInt32:
+        """Pop one word from the RX FIFO (check `rx_empty()` first)."""
+        return read32(self._base() + _RXF0 + UInt32(Self.SM * 4))
 
     def pc(self) -> UInt32:
         """Current program counter of the state machine."""

@@ -34,6 +34,12 @@ SECTIONS {
 
     .data : ALIGN(4) {
         _sdata = .;
+        /* RAM-resident code (e.g. an interrupt handler built with
+         * build.mojo --ramfunc isr_irqN, or C's section(".ramfunc")):
+         * loaded from flash by the crt0 .data copy loop, executed from
+         * SRAM, so it never waits on the XIP cache. */
+        *(.ramfunc*)
+        . = ALIGN(4);
         *(.data*)
         . = ALIGN(4);
         _edata = .;

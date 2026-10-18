@@ -14,6 +14,7 @@ Mailbox layout (base 0x2003_0000):
 
 import pico
 import pico.adc as adc
+import pico.clocks as clocks
 from pico.sync import Spinlock
 import pico.irq as irq
 import pico.multicore as multicore
@@ -39,7 +40,7 @@ comptime STATUS_DONE: UInt32 = 2
 comptime RESULT_BASE: UInt32 = MAILBOX + 0x20
 comptime PASS: UInt32 = 0x600D_0001
 comptime FAIL: UInt32 = 0xBAD0_0001
-comptime NUM_TESTS: UInt32 = 26
+comptime NUM_TESTS: UInt32 = 27
 
 
 def report(idx: UInt32, ok: Bool):
@@ -361,6 +362,31 @@ def test_adc_temp() -> Bool:
     )
 
 
+def test_pll_125mhz() -> Bool:
+    # PLL_SYS bring-up: clk_sys must measure 125 MHz +-1% on the on-chip
+    # frequency counter (referenced to the 12 MHz XOSC), the 1 µs timer
+    # must keep its rate (clk_ref is untouched), and the chip must come
+    # back to the 12 MHz state every other test assumes.
+    clocks.sys_clock_125mhz()
+    var fast = clocks.measure_khz(clocks.FC_CLK_SYS)
+    var t0 = time_us()
+    var spins: UInt32 = 0
+    while time_us() - t0 < 1000:
+        spins += 1
+    clocks.sys_clock_12mhz()
+    var slow = clocks.measure_khz(clocks.FC_CLK_SYS)
+    var t1 = time_us()
+    var spins_slow: UInt32 = 0
+    while time_us() - t1 < 1000:
+        spins_slow += 1
+    # ~10x more loop iterations per millisecond at 125 MHz than at 12 MHz
+    return (
+        fast > 123_750 and fast < 126_250
+        and slow > 11_880 and slow < 12_120
+        and spins > spins_slow * 6
+    )
+
+
 def test_uart_loopback() -> Bool:
     # PL011 internal loopback (LBE): TX->RX round trip, zero wiring.
     uart.init(115_200)
@@ -572,9 +598,10 @@ def start() abi("C"):
     report(20, test_uart_loopback())
     report(21, test_pio_sideset())
     report(22, test_pio_comptime())
-    report(23, test_spinlock_contention())
-    report(24, test_fifo_pingpong())
-    report(25, test_multicore())  # last: leaves core 1 heartbeating
+    report(23, test_pll_125mhz())
+    report(24, test_spinlock_contention())
+    report(25, test_fifo_pingpong())
+    report(26, test_multicore())  # last: leaves core 1 heartbeating
 
     write32(MAILBOX + 0x04, STATUS_DONE)
 

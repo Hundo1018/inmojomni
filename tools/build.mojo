@@ -118,7 +118,13 @@ def retarget_file(src_ll: String, dst_ll: String) raises:
     )
 
 
-def build(main_mojo: String, name: String, debug: Bool) raises -> String:
+def build(
+    main_mojo: String, name: String, debug: Bool, ramfunc: String = String()
+) raises -> String:
+    """RP2040 pipeline. `ramfunc`: an exported function name whose code
+    is moved from `.text.<name>` into `.ramfunc.<name>` after codegen, so
+    link.ld places it in SRAM (loaded by the crt0 .data copy). Used for
+    the RAM-resident interrupt-handler variant of the IRQ latency gate."""
     if not Path("runtime/link.ld").exists():
         raise Error("run from the repo root (runtime/link.ld not found)")
     _ = sh("mkdir -p build")
@@ -158,6 +164,23 @@ def build(main_mojo: String, name: String, debug: Bool) raises -> String:
     else:
         _ = shx(String("opt -O2") + NOUNWIND + ir_arm + " -o " + ir_opt)
         _ = shx(String("llc -O2") + mcu_flags + ir_opt + " -o " + fw_obj)
+    if ramfunc.byte_length() > 0:
+        # -function-sections put the handler in its own section; renaming
+        # it is all the linker script needs (`*(.ramfunc*)` -> RAM).
+        _ = shx(
+            String("arm-none-eabi-objcopy --rename-section .text.") + ramfunc
+            + "=.ramfunc." + ramfunc + " " + fw_obj
+        )
+        try:
+            _ = sh(
+                String("arm-none-eabi-objdump -h ") + fw_obj
+                + " | grep -q '\\.ramfunc\\." + ramfunc + "'"
+            )
+        except:
+            raise Error(
+                "--ramfunc " + ramfunc + ": no .text." + ramfunc
+                + " section in " + fw_obj + " (symbol not emitted?)"
+            )
 
     print("[4/4] boot2 from source + assemble crt0 + link")
     _ = build_boot2()
@@ -255,6 +278,7 @@ def main() raises:
     var debug = False
     var name = String()
     var chip = String("rp2040")
+    var ramfunc = String()
     var main_mojo = String()
     var args = argv()
     var i = 1
@@ -272,6 +296,9 @@ def main() raises:
         elif a == "--chip":
             i += 1
             chip = String(args[i])
+        elif a == "--ramfunc":
+            i += 1
+            ramfunc = String(args[i])
         elif a.startswith("--"):
             raise Error("unknown option: " + a)
         else:
@@ -288,7 +315,7 @@ def main() raises:
     if chip == "rp2350":
         elf = build_rv32(main_mojo, name, debug)
     elif chip == "rp2040":
-        elf = build(main_mojo, name, debug)
+        elf = build(main_mojo, name, debug, ramfunc)
     else:
         raise Error("unknown --chip: " + chip + " (want rp2040 or rp2350)")
 

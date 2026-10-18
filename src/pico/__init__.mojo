@@ -4,6 +4,7 @@ from pico.board import init
 from pico.gpio import Drive, Event, Function, Pin
 from pico.time import alarm0_ack, alarm0_arm, sleep_ms, sleep_us, time_us
 import pico.adc as adc
+import pico.clocks as clocks
 import pico.irq as irq
 import pico.multicore as multicore
 import pico.pins as pins

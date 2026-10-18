@@ -38,6 +38,12 @@ def test_basic_encodings() raises:
     a.pull_noblock()         # 0x8080
     a.mov_pins_x()           # 0xA001
     a.nop()                  # 0xA042 (mov y, y)
+    a.mov_x_not_null()       # 0xA02B (mov x, ~null)
+    a.in_x(32)               # 0x4020 (in x, 32 -> count field 0)
+    a.in_x(8)                # 0x4028
+    a.push_block()           # 0x8020
+    a.jmp_pin(5)             # 0x00C5
+    a.wait_gpio(0, 15)       # 0x200F
     _assert_eq(a.code[0], 0xE001, "set_pins 1")
     _assert_eq(a.code[1], 0xE081, "set_pindirs 1")
     _assert_eq(a.code[2], 0xE03D, "set_x 29")
@@ -51,7 +57,13 @@ def test_basic_encodings() raises:
     _assert_eq(a.code[10], 0x8080, "pull_noblock")
     _assert_eq(a.code[11], 0xA001, "mov_pins_x")
     _assert_eq(a.code[12], 0xA042, "nop")
-    if a.len != 13:
+    _assert_eq(a.code[13], 0xA02B, "mov_x_not_null")
+    _assert_eq(a.code[14], 0x4020, "in_x 32")
+    _assert_eq(a.code[15], 0x4028, "in_x 8")
+    _assert_eq(a.code[16], 0x8020, "push_block")
+    _assert_eq(a.code[17], 0x00C5, "jmp_pin 5")
+    _assert_eq(a.code[18], 0x200F, "wait_gpio 0,15")
+    if a.len != 19:
         raise Error("length tracking broken")
     _ok("base instruction encodings")
 

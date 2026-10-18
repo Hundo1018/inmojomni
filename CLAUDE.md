@@ -44,6 +44,7 @@ gate it, don't claim it. Global rules: `~/.claude/CLAUDE.md`.
 | test | full suite; hardware stages auto-skip without probe |
 | test-host | host-only tier — minimum bar for ANY change |
 | bench → chart | 4-language benchmark (needs probe+clang+rustc) → docs/assets/benchmarks.svg |
+| irq-latency | IRQ→GPIO latency gate: Mojo/C(gcc,clang) × flash/RAM ISR, PIO-timed at 125 MHz (probe) |
 | sizes | 4-language blink size comparison (no hardware) |
 | svd-update | refresh .vscode/rp2040.svd from pinned pico-sdk |
 | flash-rp2350 / flash-debug-rp2350 | Pico 2 build + SWD flash (openocd fork) |

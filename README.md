@@ -54,10 +54,10 @@ def start() abi("C"):
   byte the size of the same-backend C blink on the identical rig (Rust: 784 B,
   gcc: 712 B; `pixi run sizes` reproduces the comparison). Registers defined
   in Mojo fold to immediates; the register map has no runtime footprint.
-- **Hardware-in-the-loop test suite.** 26 on-target tests (arithmetic, u64,
+- **Hardware-in-the-loop test suite.** 27 on-target tests (arithmetic, u64,
   soft-float, SIMD, GPIO loopback/pulls/events/interrupts, timer, PIO with
-  side-set, NVIC, RTT, PWM, ADC, UART, dual-core launch, hardware spinlocks,
-  inter-core FIFO) report through a RAM mailbox read back over SWD.
+  side-set, NVIC, RTT, PWM, ADC, UART, PLL, dual-core launch, hardware
+  spinlocks, inter-core FIFO) report through a RAM mailbox read back over SWD.
 - **The toolchain is Mojo, too.** The build pipeline, IR retargeting pass, ELF
   verifier and benchmark driver are Mojo programs; Python remains only as the
   test orchestrator and DAP protocol client.
@@ -81,6 +81,7 @@ def start() abi("C"):
 | Dual-core launch + inter-core FIFO | ✅ | ✅ | host-recomputed checksum, both paths |
 | 1 µs hardware timer, PWM, ADC, UART | ✅ | ✅ | HIL suite / ratio+loopback gates |
 | External interrupts | ✅ NVIC | ✅ Xh3irq | timer-IRQ dispatch gate |
+| IRQ → GPIO latency, measured | ✅ 125 MHz, PIO-timed | — | `irq-latency` gate: 30k IRQs, C mirror, run spread < 2% |
 | RTT logging over SWD | ✅ | ✅ | live control-block handshake gate |
 | VS Code F5 debugging (source-level) | ✅ | ✅ (openocd fork + gdb) | automated DAP / gdb gates |
 | Four-language benchmark | ✅ | ✅ | checksum equality across languages |
@@ -228,6 +229,7 @@ pixi run flash      # build + flash over SWD; the LED starts blinking
 | `pixi run test` | Full test suite; hardware stages are skipped when no probe is attached |
 | `pixi run test-host` | Host-only tests (no hardware required) |
 | `pixi run bench` | On-target Mojo vs C vs Rust benchmark (requires probe and `rustc`; `clang-23` comes from pixi) |
+| `pixi run irq-latency` | IRQ → GPIO latency gate: Mojo vs C (gcc, clang), handler in flash vs SRAM, timed by a PIO state machine (probe, no wiring) |
 | `pixi run bench-rp2350` | Same four-language benchmark on a Pico 2 in BOOTSEL (no probe needed) |
 | `pixi run features-rp2350` | Mojo language-feature measurements on Pico 2 silicon |
 | `pixi run piomc-rp2350` | Pico 2 PIO (incl. PIO2) + dual-core hardware proof |
@@ -336,10 +338,12 @@ sm.set_clkdiv(65535)
 sm.enable()                    # the CPU can now sleep; PIO drives the LED
 ```
 
-Supported today: SET, JMP (all conditions), WAIT, OUT, PULL, MOV, NOP, delay
-cycles, **side-set** (`asm.side_set(n)` + `side=` on any instruction, optional
-and pindirs modes included), **forward labels** (`asm.future()` / `asm.bind()`),
-clock dividers, wrap, `exec()`, TX FIFO, `pc()`.
+Supported today: SET, JMP (all conditions, incl. `jmp_pin` +
+`sm.set_jmp_pin(gpio)`), WAIT, IN, OUT, PUSH, PULL, MOV (incl. `mov x, ~null`),
+NOP, delay cycles, **side-set** (`asm.side_set(n)` + `side=` on any
+instruction, optional and pindirs modes included), **forward labels**
+(`asm.future()` / `asm.bind()`), clock dividers, wrap, `exec()`, TX and RX
+FIFOs (`tx_push`, `rx_empty`, `rx_pull`), `pc()`.
 
 The assembler also runs at **compile time**: assign the program to a
 `comptime` value and the instruction words become flash constants, with
@@ -364,6 +368,16 @@ CPU idle.
 `alarm0_arm(us)` / `alarm0_ack()` drive the TIMER ALARM0 interrupt.
 `pico.init()` starts the 12 MHz crystal, performs a glitchless clock switch,
 configures the 1 µs timebase and releases GPIO from reset.
+
+### Clocks (`pico.clocks`)
+
+`pico.init()` leaves clk_sys on the 12 MHz crystal with no PLL (the benchmark
+suite depends on that shared clock). `clocks.sys_clock_125mhz()` brings up
+PLL_SYS (12 MHz × 125 / 6 / 2) and switches clk_sys to it glitch-free, leaving
+clk_ref and the 1 µs timer untouched; `clocks.sys_clock_12mhz()` reverts.
+`clocks.measure_khz(clocks.FC_CLK_SYS)` reads the on-chip frequency counter, so
+the clock a firmware claims to run at is a number it can check — the on-target
+suite requires 125,000 kHz ± 1%, and the IRQ latency gate records it.
 
 ### Interrupts (`pico.irq`)
 
@@ -390,6 +404,12 @@ Verified on hardware by an on-target test: two asynchronous ALARM0 fires
 through the NVIC while the main loop polls a counter. GPIO edge/level
 events route the same way: `pin.irq_enable(Event.EDGE_HIGH)` +
 `irq.enable(irq.IO_IRQ_BANK0)`, handler exported as `isr_irq13`.
+
+Interrupt latency is measured, not estimated: `pixi run irq-latency` times
+the path from a GPIO edge to the first store of the handler with a PIO state
+machine (see [Benchmarks](#benchmarks)). A handler can be placed in SRAM
+instead of XIP flash with `tools/build.mojo --ramfunc isr_irq13` (the
+`.ramfunc` section in `runtime/link.ld`).
 
 ### PWM (`pico.pwm`)
 
@@ -495,7 +515,7 @@ probe is present.
 | host-unit | IR retarget against synthetic modern-LLVM syntax (must pass through unchanged), then `opt -verify` and `llc` with the pinned host LLVM; volatile-op count preservation; boot2 CRC self-check; PIO assembler encodings incl. side-set, forward-label fixups and comptime==runtime equivalence |
 | compile-fail | `Pin[30]()` must be rejected at compile time |
 | build+static | Three firmware builds; ELF verification (boot2 CRC32, vector table, memory bounds); DWARF line tables present |
-| hw-mailbox | 26 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events/interrupts, timer, PIO incl. side-set + forward labels + comptime assembly, NVIC dispatch, RTT, PWM, ADC temperature, UART loopback, dual-core launch, contended spinlocks, inter-core FIFO |
+| hw-mailbox | 27 on-target Mojo tests: arithmetic, division, u64, soft-float, SIMD, comptime unrolling, GPIO loopback/pulls/events/interrupts, timer, PIO incl. side-set + forward labels + comptime assembly, NVIC dispatch, RTT, PWM, ADC temperature, UART loopback, PLL_SYS 125 MHz (frequency counter), dual-core launch, contended spinlocks, inter-core FIFO |
 | hw-rtt | RTT control block and message read back over SWD, exactly as an RTT host tool would |
 | hw-timer-rate | Hardware timer measures ≈1 MHz against the host clock |
 | hw-dap-debug | Full F5 experience over the DAP protocol: breakpoint hits, stepping, scopes, memory reads |
@@ -550,6 +570,27 @@ sizes and caveats: [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Reproduce:
 `pixi run bench` (probe, and `rustc` with the `thumbv6m-none-eabi`
 target; `clang-23` comes from pixi), then `pixi run chart`.
 
+### Interrupt latency (RP2040)
+
+`pixi run irq-latency` answers "how fast does a Mojo interrupt handler
+respond?" with hardware, not estimates: a GPIO edge raises IO_IRQ_BANK0, the
+handler's first instruction drives a second GPIO, and a PIO state machine at
+125 MHz counts the pad-to-pad delay in 16 ns steps — 3 × 10,000 interrupts
+per firmware, Mojo against gcc and clang C, handler in flash and in SRAM, with
+the clock verified by the on-chip frequency counter and the statistics
+recomputed by the host from the raw samples.
+
+| Firmware (handler in) | first IRQ, cold | every later IRQ: min = p50 = p99.9 = max |
+|---|---:|---:|
+| **Mojo** (flash / SRAM) | 2,176 / 976 ns | **176 ns** (22 cycles) |
+| C clang (flash / SRAM) | 2,176 / 976 ns | 176 ns |
+| C gcc (flash / SRAM) | 2,576 / 1,360 ns | 176 ns |
+
+Mojo and same-backend C disassemble to the same handler and respond in the
+same 22 cycles; after the first (cold-cache) interrupt the PIO saw no
+variation at all. Full setup, gates and caveats:
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md#interrupt-latency-irq--gpio-rp2040-measured-2026-10-18-mojo-110-stable-llvm-2312).
+
 ### RP2350 / Pico 2 (Hazard3, RISC-V)
 
 The same nine workloads on the Pico 2, with every language compiled for
@@ -601,13 +642,13 @@ XIP flash loses to recomputation by ~2.2×) live in
 src/main.mojo        RP2040 entry point (@export("mojo_main"))
 src/main_rp2350.mojo Pico 2 / RP2350 native-RISC-V entry point (same shape)
 src/pico/            SDK: mmio / rp2040 / gpio / pins / pio / time / irq / rtt /
-                     pwm / adc / uart / multicore / sync / board
+                     pwm / adc / uart / multicore / sync / board / clocks
                      chips (per-chip register map) / pico2 (Pico 2 board module)
 examples/            pio_blink.mojo, ...
 runtime/             crt0.S / link.ld / boot2.bin (RP2040),
                      crt0_rv32.S / link_rv32.ld / rp2350_image_def.S (RP2350)
 tools/               Mojo: build.mojo (pipeline), retarget.mojo (IR pass),
-                     check_elf.mojo, bench.mojo, bench_rp2350.mojo,
+                     check_elf.mojo, bench.mojo, irq_latency.mojo, bench_rp2350.mojo,
                      features_rp2350.mojo, piomc_rp2350.mojo, chart.mojo, hil.mojo
                      Python (test rig only): run_tests.py, hil.py, dap_client.py,
                      picoboot_read.py (PICOBOOT USB reader for the RP2350 loop)
@@ -615,6 +656,7 @@ tests/               host/ (unit), compile_fail/, on_target/ (on-board Mojo
                      suite), on_target_rp2350/ (Pico 2: readback gate, feature
                      measurements, PIO + dual-core proof)
 bench/               bench.mojo + bench.c + bench.rs (identical workloads),
+                     irq_latency.mojo + irq_latency.c (IRQ → GPIO latency),
                      bench_rp2350.* (same kernels, rv32imac + mcycle)
 docs/                BENCHMARKS.md, design notes
 .github/workflows/   CI: host test suite + firmware size gate + RP2350 build
